@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Nouvelle conversation</string>
     <string name="settings">Réglages</string>
     <string name="providers">Fournisseurs AI</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">Variables d\'environnement</string>
     <string name="settings_env_vars_subtitle">Variables injectées dans le bac à sable</string>
     <string name="settings_section_storage">Stockage</string>
-    <string name="settings_storage_subtitle">Gérer le rootfs Alpine Linux et parcourir les fichiers</string>
+    <string name="settings_storage_subtitle">Gérer le rootfs EulerOS Linux et parcourir les fichiers</string>
     <string name="settings_section_permissions">Autorisations</string>
     <string name="settings_permissions_subtitle">Contrôler l\'accès de Minis Agent aux fonctions sensibles</string>
     <string name="settings_section_logs">Journaux</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">Résultat</string>
     <string name="rootfs_info_section">Infos</string>
     <string name="rootfs_about_title">À propos du rootfs</string>
-    <string name="rootfs_about_description">Le rootfs contient le système de fichiers Alpine Linux utilisé par le sandbox. La réinitialisation supprimera toutes les données et restaurera l\'état d\'usine.</string>
+    <string name="rootfs_about_description">Le rootfs contient le système de fichiers EulerOS Linux utilisé par le sandbox. La réinitialisation supprimera toutes les données et restaurera l\'état d\'usine.</string>
     <string name="rootfs_about_operations">Réinit. : tout supprimer | Sauvegarde : enregistrer /root | Restauration : récupérer les données sauvegardées</string>
     <string name="rootfs_reset_confirm_title">Réinitialiser le rootfs ?</string>
     <string name="rootfs_reset_confirm_message">Cela supprimera tout le rootfs. Toutes les données seront perdues.</string>

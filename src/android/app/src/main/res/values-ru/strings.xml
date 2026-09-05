@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Новый чат</string>
     <string name="settings">Настройки</string>
     <string name="providers">Провайдеры</string>
@@ -278,7 +278,7 @@
     <string name="settings_env_vars">Переменные окружения</string>
     <string name="settings_env_vars_subtitle">Переменные, добавляемые в Песочницу</string>
     <string name="settings_section_storage">Хранилище</string>
-    <string name="settings_storage_subtitle">Управление корневой ФС Alpine Linux и просмотр файлов</string>
+    <string name="settings_storage_subtitle">Управление корневой ФС EulerOS Linux и просмотр файлов</string>
     <string name="settings_section_permissions">Разрешения</string>
     <string name="settings_permissions_subtitle">Управление доступом Агента к функциям, связанным с приватностью</string>
     <string name="settings_section_logs">Журналы</string>
@@ -928,7 +928,7 @@
     <string name="rootfs_result_section">Результат</string>
     <string name="rootfs_info_section">Информация</string>
     <string name="rootfs_about_title">О Rootfs</string>
-    <string name="rootfs_about_description">Rootfs содержит файловую систему Alpine Linux, используемую песочницей. Сброс удалит все данные и вернёт к заводскому состоянию.</string>
+    <string name="rootfs_about_description">Rootfs содержит файловую систему EulerOS Linux, используемую песочницей. Сброс удалит все данные и вернёт к заводскому состоянию.</string>
     <string name="rootfs_about_operations">Сброс: удалить всё | Резервная копия: сохранить каталог /root | Восстановление: вернуть сохранённые данные</string>
     <string name="rootfs_reset_confirm_title">Сбросить Rootfs?</string>
     <string name="rootfs_reset_confirm_message">Это удалит весь rootfs. Все данные будут потеряны.</string>

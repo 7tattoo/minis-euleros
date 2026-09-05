@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">แชทใหม่</string>
     <string name="settings">การตั้งค่า</string>
     <string name="providers">ผู้ให้บริการ</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">ตัวแปรสภาพแวดล้อม</string>
     <string name="settings_env_vars_subtitle">ตัวแปรที่ถูกใส่เข้าไปในแซนด์บ็อกซ์</string>
     <string name="settings_section_storage">พื้นที่จัดเก็บ</string>
-    <string name="settings_storage_subtitle">จัดการ Alpine Linux rootfs และเรียกดูไฟล์</string>
+    <string name="settings_storage_subtitle">จัดการ EulerOS Linux rootfs และเรียกดูไฟล์</string>
     <string name="settings_section_permissions">สิทธิ์</string>
     <string name="settings_permissions_subtitle">ควบคุมการเข้าถึงฟีเจอร์ที่มีความอ่อนไหวของ Agent</string>
     <string name="settings_section_logs">บันทึก</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">ผลลัพธ์</string>
     <string name="rootfs_info_section">ข้อมูล</string>
     <string name="rootfs_about_title">เกี่ยวกับ Rootfs</string>
-    <string name="rootfs_about_description">Rootfs คือระบบไฟล์ Alpine Linux ที่แซนด์บ็อกซ์ใช้งาน การรีเซ็ตจะลบข้อมูลทั้งหมดและคืนค่ากลับสู่สภาพเริ่มต้น</string>
+    <string name="rootfs_about_description">Rootfs คือระบบไฟล์ EulerOS Linux ที่แซนด์บ็อกซ์ใช้งาน การรีเซ็ตจะลบข้อมูลทั้งหมดและคืนค่ากลับสู่สภาพเริ่มต้น</string>
     <string name="rootfs_about_operations">รีเซ็ต: ลบทั้งหมด | สำรอง: บันทึกไดเรกทอรี /root | กู้คืน: นำข้อมูลที่บันทึกไว้กลับมา</string>
     <string name="rootfs_reset_confirm_title">รีเซ็ต Rootfs หรือไม่</string>
     <string name="rootfs_reset_confirm_message">การกระทำนี้จะลบ rootfs ทั้งหมด ข้อมูลทั้งหมดจะสูญหาย</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Neuer Chat</string>
     <string name="settings">Einstellungen</string>
     <string name="providers">KI-Anbieter</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">Umgebungsvariablen</string>
     <string name="settings_env_vars_subtitle">In die Sandbox eingespeiste Variablen</string>
     <string name="settings_section_storage">Speicher</string>
-    <string name="settings_storage_subtitle">Alpine-Linux-Rootfs verwalten und Dateien durchsuchen</string>
+    <string name="settings_storage_subtitle">EulerOS-Linux-Rootfs verwalten und Dateien durchsuchen</string>
     <string name="settings_section_permissions">Berechtigungen</string>
     <string name="settings_permissions_subtitle">Zugriff von Minis Agent auf datenschutzrelevante Funktionen steuern</string>
     <string name="settings_section_logs">Logs</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">Ergebnis</string>
     <string name="rootfs_info_section">Info</string>
     <string name="rootfs_about_title">Über Rootfs</string>
-    <string name="rootfs_about_description">Das rootfs enthält das Alpine-Linux-Dateisystem, das von der Sandbox verwendet wird. Beim Zurücksetzen werden alle Daten gelöscht und der Werkszustand wiederhergestellt.</string>
+    <string name="rootfs_about_description">Das rootfs enthält das EulerOS-Linux-Dateisystem, das von der Sandbox verwendet wird. Beim Zurücksetzen werden alle Daten gelöscht und der Werkszustand wiederhergestellt.</string>
     <string name="rootfs_about_operations">Zurücksetzen: alles löschen | Sichern: /root speichern | Wiederherstellen: gesicherte Daten wiederherstellen</string>
     <string name="rootfs_reset_confirm_title">Rootfs zurücksetzen?</string>
     <string name="rootfs_reset_confirm_message">Das gesamte rootfs wird gelöscht. Alle Daten gehen verloren.</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Nuevo chat</string>
     <string name="settings">Ajustes</string>
     <string name="providers">Proveedores</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">Variables de entorno</string>
     <string name="settings_env_vars_subtitle">Variables inyectadas en el sandbox</string>
     <string name="settings_section_storage">Almacenamiento</string>
-    <string name="settings_storage_subtitle">Administrar el rootfs de Alpine Linux y explorar archivos</string>
+    <string name="settings_storage_subtitle">Administrar el rootfs de EulerOS Linux y explorar archivos</string>
     <string name="settings_section_permissions">Permisos</string>
     <string name="settings_permissions_subtitle">Controla el acceso de Minis Agent a funciones sensibles para la privacidad</string>
     <string name="settings_section_logs">Registros</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">Resultado</string>
     <string name="rootfs_info_section">Información</string>
     <string name="rootfs_about_title">Acerca del rootfs</string>
-    <string name="rootfs_about_description">El rootfs contiene el sistema de archivos Alpine Linux que usa el entorno aislado. Restablecerlo eliminará todos los datos y lo devolverá al estado de fábrica.</string>
+    <string name="rootfs_about_description">El rootfs contiene el sistema de archivos EulerOS Linux que usa el entorno aislado. Restablecerlo eliminará todos los datos y lo devolverá al estado de fábrica.</string>
     <string name="rootfs_about_operations">Restablecer: eliminar todo | Copia de seguridad: guardar el directorio /root | Restaurar: recuperar los datos guardados</string>
     <string name="rootfs_reset_confirm_title">¿Restablecer el rootfs?</string>
     <string name="rootfs_reset_confirm_message">Esto eliminará todo el rootfs. Se perderán todos los datos.</string>

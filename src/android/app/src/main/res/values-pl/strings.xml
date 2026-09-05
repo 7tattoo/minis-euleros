@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Nowy czat</string>
     <string name="settings">Ustawienia</string>
     <string name="providers">Dostawcy</string>
@@ -278,7 +278,7 @@
     <string name="settings_env_vars">Zmienne środowiskowe</string>
     <string name="settings_env_vars_subtitle">Zmienne wstrzykiwane do piaskownicy</string>
     <string name="settings_section_storage">Pamięć masowa</string>
-    <string name="settings_storage_subtitle">Zarządzaj systemem plików Alpine Linux i przeglądaj pliki</string>
+    <string name="settings_storage_subtitle">Zarządzaj systemem plików EulerOS Linux i przeglądaj pliki</string>
     <string name="settings_section_permissions">Uprawnienia</string>
     <string name="settings_permissions_subtitle">Kontroluj dostęp Agenta do funkcji wrażliwych dla prywatności</string>
     <string name="settings_section_logs">Dzienniki</string>
@@ -928,7 +928,7 @@
     <string name="rootfs_result_section">Wynik</string>
     <string name="rootfs_info_section">Informacje</string>
     <string name="rootfs_about_title">O systemie rootfs</string>
-    <string name="rootfs_about_description">Rootfs zawiera system plików Alpine Linux używany przez piaskownicę. Zresetowanie usunie wszystkie dane i przywróci stan fabryczny.</string>
+    <string name="rootfs_about_description">Rootfs zawiera system plików EulerOS Linux używany przez piaskownicę. Zresetowanie usunie wszystkie dane i przywróci stan fabryczny.</string>
     <string name="rootfs_about_operations">Zresetuj: usuń wszystko | Kopia: zapisz katalog /root | Przywróć: odzyskaj zapisane dane</string>
     <string name="rootfs_reset_confirm_title">Zresetować rootfs?</string>
     <string name="rootfs_reset_confirm_message">Spowoduje to usunięcie całego systemu rootfs. Wszystkie dane zostaną utracone.</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Yeni Sohbet</string>
     <string name="settings">Ayarlar</string>
     <string name="providers">Sağlayıcılar</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">Ortam Değişkenleri</string>
     <string name="settings_env_vars_subtitle">Sanal alana aktarılan değişkenler</string>
     <string name="settings_section_storage">Depolama</string>
-    <string name="settings_storage_subtitle">Alpine Linux rootfs\'i yönetin ve dosyalara göz atın</string>
+    <string name="settings_storage_subtitle">EulerOS Linux rootfs\'i yönetin ve dosyalara göz atın</string>
     <string name="settings_section_permissions">İzinler</string>
     <string name="settings_permissions_subtitle">Agent\'ın gizlilik açısından hassas özelliklere erişimini denetleyin</string>
     <string name="settings_section_logs">Günlükler</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">Sonuç</string>
     <string name="rootfs_info_section">Bilgi</string>
     <string name="rootfs_about_title">Rootfs Hakkında</string>
-    <string name="rootfs_about_description">Rootfs, sanal alanın kullandığı Alpine Linux dosya sistemini içerir. Sıfırlama tüm verileri siler ve fabrika durumuna döndürür.</string>
+    <string name="rootfs_about_description">Rootfs, sanal alanın kullandığı EulerOS Linux dosya sistemini içerir. Sıfırlama tüm verileri siler ve fabrika durumuna döndürür.</string>
     <string name="rootfs_about_operations">Sıfırla: Her şeyi sil | Yedekle: /root dizinini kaydet | Geri Yükle: Kayıtlı verileri kurtar</string>
     <string name="rootfs_reset_confirm_title">Rootfs sıfırlansın mı?</string>
     <string name="rootfs_reset_confirm_message">Bu işlem rootfs\'in tamamını siler. Tüm veriler kaybolur.</string>

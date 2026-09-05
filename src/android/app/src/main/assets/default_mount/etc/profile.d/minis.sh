@@ -2,7 +2,7 @@
 # Loaded by /etc/profile via the profile.d mechanism (login shells only).
 
 # T294: prompt parity with iOS — `root@minis:/var/minis#`. iOS bakes the
-# literal "minis" into PS1 (deps/prepare_alpine_rootfs.sh) rather than
+# literal "minis" into PS1 (the rootfs build script) rather than
 # relying on \h, so the prompt is stable regardless of what /etc/hostname
 # happens to contain. We do the same on Android so a fresh install
 # matches without needing a rootfs rebuild.
@@ -15,7 +15,7 @@ export HISTSIZE=1000
 # Point ENV to .ashrc so interactive ash picks up line-editing config
 export ENV="$HOME/.ashrc"
 
-# Default pager — less is standard on Alpine; keep explicit for scripts
+# Default pager — keep explicit for scripts
 # that probe $PAGER.
 export PAGER=less
 

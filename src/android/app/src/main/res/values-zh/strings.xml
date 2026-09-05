@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">新对话</string>
     <string name="settings">设置</string>
     <string name="providers">AI 服务商</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">环境变量</string>
     <string name="settings_env_vars_subtitle">注入到沙箱内的变量</string>
     <string name="settings_section_storage">存储</string>
-    <string name="settings_storage_subtitle">管理 Alpine Linux rootfs 并浏览文件</string>
+    <string name="settings_storage_subtitle">管理 EulerOS Linux rootfs 并浏览文件</string>
     <string name="settings_section_permissions">权限</string>
     <string name="settings_permissions_subtitle">控制 Agent 对隐私敏感功能的访问</string>
     <string name="settings_section_logs">日志</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">结果</string>
     <string name="rootfs_info_section">信息</string>
     <string name="rootfs_about_title">关于 Rootfs</string>
-    <string name="rootfs_about_description">rootfs 包含沙箱使用的 Alpine Linux 文件系统。重置将删除所有数据并恢复出厂状态。</string>
+    <string name="rootfs_about_description">rootfs 包含沙箱使用的 EulerOS Linux 文件系统。重置将删除所有数据并恢复出厂状态。</string>
     <string name="rootfs_about_operations">重置：删除全部 | 备份：保存 /root 目录 | 恢复：恢复已保存的数据</string>
     <string name="rootfs_reset_confirm_title">重置 Rootfs？</string>
     <string name="rootfs_reset_confirm_message">这将删除整个 rootfs。所有数据将丢失。</string>

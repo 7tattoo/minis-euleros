@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Bagong Chat</string>
     <string name="settings">Mga Setting</string>
     <string name="providers">Mga Provider</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">Mga Environment Variable</string>
     <string name="settings_env_vars_subtitle">Mga variable na ipinapasok sa sandbox</string>
     <string name="settings_section_storage">Storage</string>
-    <string name="settings_storage_subtitle">Pamahalaan ang Alpine Linux rootfs at tingnan ang mga file</string>
+    <string name="settings_storage_subtitle">Pamahalaan ang EulerOS Linux rootfs at tingnan ang mga file</string>
     <string name="settings_section_permissions">Mga Pahintulot</string>
     <string name="settings_permissions_subtitle">Kontrolin ang access ng Agent sa mga sensitibong feature</string>
     <string name="settings_section_logs">Mga Log</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">Resulta</string>
     <string name="rootfs_info_section">Impormasyon</string>
     <string name="rootfs_about_title">Tungkol sa Rootfs</string>
-    <string name="rootfs_about_description">Naglalaman ang rootfs ng Alpine Linux filesystem na ginagamit ng sandbox. Buburahin ng pag-reset ang lahat ng data at ibabalik ito sa orihinal na kalagayan.</string>
+    <string name="rootfs_about_description">Naglalaman ang rootfs ng EulerOS Linux filesystem na ginagamit ng sandbox. Buburahin ng pag-reset ang lahat ng data at ibabalik ito sa orihinal na kalagayan.</string>
     <string name="rootfs_about_operations">I-reset: Burahin ang lahat | Backup: I-save ang /root directory | Ibalik: Bawiin ang naka-save na data</string>
     <string name="rootfs_reset_confirm_title">I-reset ang Rootfs?</string>
     <string name="rootfs_reset_confirm_message">Buburahin nito ang buong rootfs. Mawawala ang lahat ng data.</string>

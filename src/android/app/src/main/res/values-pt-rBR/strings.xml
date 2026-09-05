@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Nova conversa</string>
     <string name="settings">Configurações</string>
     <string name="providers">Provedores</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">Variáveis de ambiente</string>
     <string name="settings_env_vars_subtitle">Variáveis injetadas no ambiente isolado</string>
     <string name="settings_section_storage">Armazenamento</string>
-    <string name="settings_storage_subtitle">Gerencie o sistema de arquivos Alpine Linux e navegue pelos arquivos</string>
+    <string name="settings_storage_subtitle">Gerencie o sistema de arquivos EulerOS Linux e navegue pelos arquivos</string>
     <string name="settings_section_permissions">Permissões</string>
     <string name="settings_permissions_subtitle">Controle o acesso do Agente a recursos sensíveis à privacidade</string>
     <string name="settings_section_logs">Registros</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">Resultado</string>
     <string name="rootfs_info_section">Informações</string>
     <string name="rootfs_about_title">Sobre o rootfs</string>
-    <string name="rootfs_about_description">O rootfs contém o sistema de arquivos Alpine Linux usado pelo ambiente isolado. Redefinir apaga todos os dados e volta ao estado de fábrica.</string>
+    <string name="rootfs_about_description">O rootfs contém o sistema de arquivos EulerOS Linux usado pelo ambiente isolado. Redefinir apaga todos os dados e volta ao estado de fábrica.</string>
     <string name="rootfs_about_operations">Redefinir: apaga tudo | Backup: salva a pasta /root | Restaurar: recupera os dados salvos</string>
     <string name="rootfs_reset_confirm_title">Redefinir o rootfs?</string>
     <string name="rootfs_reset_confirm_message">Isso apaga todo o rootfs. Todos os dados serão perdidos.</string>

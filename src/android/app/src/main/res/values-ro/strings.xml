@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Conversație nouă</string>
     <string name="settings">Setări</string>
     <string name="providers">Furnizori</string>
@@ -277,7 +277,7 @@
     <string name="settings_env_vars">Variabile de mediu</string>
     <string name="settings_env_vars_subtitle">Variabile injectate în mediul izolat</string>
     <string name="settings_section_storage">Stocare</string>
-    <string name="settings_storage_subtitle">Gestionează sistemul de fișiere Alpine Linux și răsfoiește fișierele</string>
+    <string name="settings_storage_subtitle">Gestionează sistemul de fișiere EulerOS Linux și răsfoiește fișierele</string>
     <string name="settings_section_permissions">Permisiuni</string>
     <string name="settings_permissions_subtitle">Controlează accesul Agentului la funcțiile sensibile pentru confidențialitate</string>
     <string name="settings_section_logs">Jurnale</string>
@@ -927,7 +927,7 @@
     <string name="rootfs_result_section">Rezultat</string>
     <string name="rootfs_info_section">Informații</string>
     <string name="rootfs_about_title">Despre rootfs</string>
-    <string name="rootfs_about_description">Rootfs conține sistemul de fișiere Alpine Linux folosit de mediul izolat. Resetarea va șterge toate datele și va reveni la starea inițială.</string>
+    <string name="rootfs_about_description">Rootfs conține sistemul de fișiere EulerOS Linux folosit de mediul izolat. Resetarea va șterge toate datele și va reveni la starea inițială.</string>
     <string name="rootfs_about_operations">Resetare: șterge tot | Salvare: păstrează directorul /root | Restaurare: recuperează datele salvate</string>
     <string name="rootfs_reset_confirm_title">Resetezi rootfs?</string>
     <string name="rootfs_reset_confirm_message">Întregul rootfs va fi șters. Toate datele se vor pierde.</string>

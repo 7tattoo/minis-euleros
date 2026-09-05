@@ -27,5 +27,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Minis"
+rootProject.name = "MinisEulerOS"
 include(":app")

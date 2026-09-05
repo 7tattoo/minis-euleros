@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Sembang Baharu</string>
     <string name="settings">Tetapan</string>
     <string name="providers">Pembekal</string>
@@ -276,7 +276,7 @@
     <string name="settings_env_vars">Pemboleh Ubah Persekitaran</string>
     <string name="settings_env_vars_subtitle">Pemboleh ubah yang disuntik ke dalam sandbox</string>
     <string name="settings_section_storage">Storan</string>
-    <string name="settings_storage_subtitle">Urus rootfs Alpine Linux dan layari fail</string>
+    <string name="settings_storage_subtitle">Urus rootfs EulerOS Linux dan layari fail</string>
     <string name="settings_section_permissions">Kebenaran</string>
     <string name="settings_permissions_subtitle">Kawal capaian Ejen kepada ciri sensitif privasi</string>
     <string name="settings_section_logs">Log</string>
@@ -926,7 +926,7 @@
     <string name="rootfs_result_section">Keputusan</string>
     <string name="rootfs_info_section">Maklumat</string>
     <string name="rootfs_about_title">Perihal Rootfs</string>
-    <string name="rootfs_about_description">Rootfs mengandungi sistem fail Alpine Linux yang digunakan oleh sandbox. Menetapkan semula akan memadam semua data dan memulihkannya kepada keadaan asal.</string>
+    <string name="rootfs_about_description">Rootfs mengandungi sistem fail EulerOS Linux yang digunakan oleh sandbox. Menetapkan semula akan memadam semua data dan memulihkannya kepada keadaan asal.</string>
     <string name="rootfs_about_operations">Tetap Semula: Padam semuanya | Sandaran: Simpan direktori /root | Pulih: Kembalikan data tersimpan</string>
     <string name="rootfs_reset_confirm_title">Tetap Semula Rootfs?</string>
     <string name="rootfs_reset_confirm_message">Ini akan memadam seluruh rootfs. Semua data akan hilang.</string>

@@ -5,7 +5,7 @@
      directory is never consulted and the app would silently fall back
      to English. -->
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">MinisEulerOS</string>
     <string name="new_chat">Obrolan Baru</string>
     <string name="settings">Pengaturan</string>
     <string name="providers">Penyedia</string>
@@ -281,7 +281,7 @@
     <string name="settings_env_vars">Variabel Lingkungan</string>
     <string name="settings_env_vars_subtitle">Variabel yang disuntikkan ke sandbox</string>
     <string name="settings_section_storage">Penyimpanan</string>
-    <string name="settings_storage_subtitle">Kelola rootfs Alpine Linux dan jelajahi berkas</string>
+    <string name="settings_storage_subtitle">Kelola rootfs EulerOS Linux dan jelajahi berkas</string>
     <string name="settings_section_permissions">Izin</string>
     <string name="settings_permissions_subtitle">Kontrol akses Agen ke fitur sensitif privasi</string>
     <string name="settings_section_logs">Log</string>
@@ -931,7 +931,7 @@
     <string name="rootfs_result_section">Hasil</string>
     <string name="rootfs_info_section">Info</string>
     <string name="rootfs_about_title">Tentang Rootfs</string>
-    <string name="rootfs_about_description">Rootfs berisi sistem berkas Alpine Linux yang digunakan oleh sandbox. Mengatur ulang akan menghapus semua data dan mengembalikannya ke kondisi awal.</string>
+    <string name="rootfs_about_description">Rootfs berisi sistem berkas EulerOS Linux yang digunakan oleh sandbox. Mengatur ulang akan menghapus semua data dan mengembalikannya ke kondisi awal.</string>
     <string name="rootfs_about_operations">Atur Ulang: Hapus semuanya | Cadangkan: Simpan direktori /root | Pulihkan: Kembalikan data tersimpan</string>
     <string name="rootfs_reset_confirm_title">Atur Ulang Rootfs?</string>
     <string name="rootfs_reset_confirm_message">Ini akan menghapus seluruh rootfs. Semua data akan hilang.</string>

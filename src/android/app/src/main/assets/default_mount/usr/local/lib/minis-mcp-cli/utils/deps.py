@@ -1,7 +1,7 @@
 """Runtime dependency auto-resolution for STDIO MCP servers.
 
 When a server's `command` is something like `npx`/`uvx` that isn't installed in
-the minimal Alpine rootfs, resolve it silently (log only, never touch stdout)
+the minimal EulerOS rootfs, resolve it silently (log only, never touch stdout)
 so the agent's `minis-mcp-cli call` just works. Shared iOS/Android.
 """
 
@@ -39,11 +39,11 @@ def _run(cmd):
 
 # command-name -> install command(s) to try in order.
 _RESOLVERS = {
-    "npx": ["apk add --quiet nodejs npm"],
-    "node": ["apk add --quiet nodejs npm"],
-    "npm": ["apk add --quiet nodejs npm"],
-    "python3": ["apk add --quiet python3 py3-pip"],
-    "pip": ["apk add --quiet python3 py3-pip"],
+    "npx": ["yum install -y nodejs npm"],
+    "node": ["yum install -y nodejs npm"],
+    "npm": ["yum install -y nodejs npm"],
+    "python3": ["yum install -y python3 python3-pip"],
+    "pip": ["yum install -y python3 python3-pip"],
     "uvx": ["pip install --quiet uv", "pip install --quiet --break-system-packages uv"],
     "uv": ["pip install --quiet uv", "pip install --quiet --break-system-packages uv"],
 }

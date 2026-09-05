@@ -23,7 +23,11 @@ fun customizationValue(key: String): String =
     (appCustomization.getProperty(key) ?: "").replace("\"", "\\\"")
 
 android {
-    namespace = "com.openminis.app"
+    namespace = "com.miniseuleros.app"
+    // MinisEulerOS: pin the NDK that is actually installed in the build
+    // environment (r29 with the native aarch64 toolchain). AGP's default
+    // (r27) is absent here and would try to auto-download.
+    ndkVersion = "29.0.14206865"
     // [T-android-dynamic-island] Bumped 35→36 so the Android 16 (Baklava)
     // Live Updates APIs — Notification.ProgressStyle, FLAG_PROMOTED_ONGOING,
     // NotificationManager.canPostPromotedNotifications(), setShortCriticalText —
@@ -33,7 +37,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.openminis.app"
+        applicationId = "com.miniseuleros.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 25
@@ -235,12 +239,11 @@ dependencies {
     // note in `ndk`; we ship arm64-v8a only.
     implementation("com.github.helloooideeeeea:RealTimeCutVADLibraryForAndroid:1.0.5@aar")
 
-    // rclone, via its official gomobile binding, for backup destinations
-    // (SMB / WebDAV / SFTP / S3 / FTP). Build it with
-    // `deps/build_rclone_android.sh` — the .aar is a build artifact under
-    // app/libs/, not a checked-in binary. Backends are decided by
-    // deps/rclone-mobile/backends/backends.go, shared with the iOS build.
-    implementation(group = "", name = "rclone", ext = "aar")
+    // NOTE (MinisEulerOS): rclone remote backup is not bundled in this build.
+    // The original OpenMinis project ships it as a build artifact produced by
+    // deps/build_rclone_android.sh; restore support by dropping the .aar into
+    // app/libs/ and re-adding the dependency below.
+    // implementation(group = "", name = "rclone", ext = "aar")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
