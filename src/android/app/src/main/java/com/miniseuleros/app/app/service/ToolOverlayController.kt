@@ -122,7 +122,7 @@ class ToolOverlayController(private val context: Context) {
     private var layoutParams: WindowManager.LayoutParams? = null
     // [T-android-overlay-reply-status-34599] Session ID associated with
     // the current overlay capsule. The whole-capsule tap builds a
-    // `minis://session/<id>` deep-link to land back in the right chat;
+    // `miniseuleros://session/<id>` deep-link to land back in the right chat;
     // null falls through to "just bring MainActivity forward" so we
     // never strand the user when no session id was published.
     private var pendingSessionId: String? = null
@@ -650,12 +650,12 @@ class ToolOverlayController(private val context: Context) {
             ).apply {
                 // [T-android-overlay-reply-status-34599] When we have a
                 // tracked session, route the tap through the existing
-                // `minis://session/<id>` deep-link so MainActivity's
+                // `miniseuleros://session/<id>` deep-link so MainActivity's
                 // DeepLinkHandler navigates to that chat. When sid is
                 // null (e.g. completion observed before any session was
                 // pushed), fall back to plain "bring to front".
                 if (!sid.isNullOrBlank()) {
-                    data = Uri.parse("minis://session/$sid")
+                    data = Uri.parse("miniseuleros://session/$sid")
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or

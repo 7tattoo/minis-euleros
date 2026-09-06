@@ -4,41 +4,41 @@ import android.net.Uri
 import com.miniseuleros.app.ui.navigation.Routes
 
 /**
- * Parses minis:// deep link URIs into navigation actions.
+ * Parses miniseuleros:// deep link URIs into navigation actions.
  *
  * Supported routes (matching iOS):
- *   minis://share                              → open share flow
- *   minis://views/alarm                        → open alarm list
- *   minis://open_terminal?init_command=...      → open terminal with command
- *   minis://session/<id>                        → open specific session
- *   minis://settings                            → Settings home
- *   minis://settings/providers                  → Provider list
- *   minis://settings/providers/<instanceId>     → Provider detail
- *   minis://settings/model-groups               → Model Groups (incl. Agent Loop section)
- *   minis://settings/model-groups/<groupId>     → Model Group detail
- *   minis://settings/usage                      → Token usage
- *   minis://settings/skills                     → Skills management
- *   minis://settings/memory                     → Memory management
- *   minis://settings/storage                    → Storage management
- *   minis://settings/mount-external             → Mount External Folders list
- *   minis://settings/mounts                     → alias for mount-external
- *   minis://settings/shared-folders             → Shared Folders list (T235)
- *   minis://settings/shared_folders             → alias for shared-folders
- *   minis://settings/logs                       → Log management
- *   minis://settings/appearance                 → Appearance
- *   minis://settings/background                 → Background settings
- *   minis://settings/about                      → About
- *   minis://settings/permissions                → Permissions
- *   minis://settings/environments[?create_key=...&create_value=...&create_note=...]
+ *   miniseuleros://share                              → open share flow
+ *   miniseuleros://views/alarm                        → open alarm list
+ *   miniseuleros://open_terminal?init_command=...      → open terminal with command
+ *   miniseuleros://session/<id>                        → open specific session
+ *   miniseuleros://settings                            → Settings home
+ *   miniseuleros://settings/providers                  → Provider list
+ *   miniseuleros://settings/providers/<instanceId>     → Provider detail
+ *   miniseuleros://settings/model-groups               → Model Groups (incl. Agent Loop section)
+ *   miniseuleros://settings/model-groups/<groupId>     → Model Group detail
+ *   miniseuleros://settings/usage                      → Token usage
+ *   miniseuleros://settings/skills                     → Skills management
+ *   miniseuleros://settings/memory                     → Memory management
+ *   miniseuleros://settings/storage                    → Storage management
+ *   miniseuleros://settings/mount-external             → Mount External Folders list
+ *   miniseuleros://settings/mounts                     → alias for mount-external
+ *   miniseuleros://settings/shared-folders             → Shared Folders list (T235)
+ *   miniseuleros://settings/shared_folders             → alias for shared-folders
+ *   miniseuleros://settings/logs                       → Log management
+ *   miniseuleros://settings/appearance                 → Appearance
+ *   miniseuleros://settings/background                 → Background settings
+ *   miniseuleros://settings/about                      → About
+ *   miniseuleros://settings/permissions                → Permissions
+ *   miniseuleros://settings/environments[?create_key=...&create_value=...&create_note=...]
  *                                               → Environment variables
- *   minis://settings/rootfs                     → Rootfs management (mirror config lives here)
- *   minis://settings/mirrors                    → alias for rootfs (mirrors live inside Rootfs UI)
+ *   miniseuleros://settings/rootfs                     → Rootfs management (mirror config lives here)
+ *   miniseuleros://settings/mirrors                    → alias for rootfs (mirrors live inside Rootfs UI)
  *
  * Unknown settings paths fall back to Settings home rather than
  * Unknown — matches iOS's "best-effort land somewhere reasonable"
  * behavior so an LLM-generated link can never strand the user.
  *
- * Resource-class URIs (`minis://workspace/...`, `minis://skills/...`,
+ * Resource-class URIs (`miniseuleros://workspace/...`, `miniseuleros://skills/...`,
  * etc.) are intentionally NOT handled here — they resolve to on-disk
  * files and go through `ChatLinkResolver` at the chat-view layer. This
  * parser only handles *navigation* targets that change the app's top-
@@ -59,9 +59,9 @@ sealed class DeepLinkAction {
      *  - [NewVoiceChat] — new chat + auto-trigger voice input mic on first compose
      *  - [NewCameraChat] — new chat + auto-launch camera attachment on first compose
      *
-     * Encoded as `minis://action/<name>` so the static shortcuts XML can
+     * Encoded as `miniseuleros://action/<name>` so the static shortcuts XML can
      * point to them via plain Intent.data without any custom extras —
-     * matches the existing minis:// deep-link conventions.
+     * matches the existing miniseuleros:// deep-link conventions.
      */
     data object NewChat : DeepLinkAction()
     data object NewVoiceChat : DeepLinkAction()
@@ -81,9 +81,9 @@ sealed class DeepLinkAction {
      * Launch the in-chat HTML preview, fullscreen, for a pinned home-screen
      * shortcut.
      *
-     * Encoded as `minis://session/<sessionId>/<resource-path>` —
+     * Encoded as `miniseuleros://session/<sessionId>/<resource-path>` —
      * [sessionId] selects which chat to land in; [resourcePath] is the
-     * resource path under `/var/minis/` (e.g. `/browser/snake.html`).
+     * resource path under `/var/minis-euleros/` (e.g. `/browser/snake.html`).
      * [title] is the cached page title at pin time, used as the fallback
      * while WebView re-reports its own.
      */
@@ -98,7 +98,7 @@ sealed class DeepLinkAction {
 
 object DeepLinkHandler {
     fun parse(uri: Uri?): DeepLinkAction {
-        if (uri == null || uri.scheme != "minis") return DeepLinkAction.Unknown
+        if (uri == null || uri.scheme != "miniseuleros") return DeepLinkAction.Unknown
         val host = uri.host ?: return DeepLinkAction.Unknown
         val path = uri.path.orEmpty()
 
@@ -122,8 +122,8 @@ object DeepLinkHandler {
             }
             "settings" -> parseSettingsPath(uri)
             "session" -> {
-                // minis://session/<sessionId>                → OpenSession
-                // minis://session/<sessionId>/<resource-path> → OpenHtmlPreview
+                // miniseuleros://session/<sessionId>                → OpenSession
+                // miniseuleros://session/<sessionId>/<resource-path> → OpenHtmlPreview
                 val segments = path.removePrefix("/")
                     .split('/')
                     .filter { it.isNotEmpty() }
@@ -143,7 +143,7 @@ object DeepLinkHandler {
     }
 
     /**
-     * T183: walk a `minis://settings/<path>` URI to the right NavHost
+     * T183: walk a `miniseuleros://settings/<path>` URI to the right NavHost
      * route. Two cases stay distinct:
      *
      *  - `environments?create_key=…` — keeps the dedicated
@@ -204,7 +204,7 @@ object DeepLinkHandler {
                 // iOS parity (AIChatView.swift L1407-1411): only `create_key`
                 // is required. Missing `create_value`/`create_note` default
                 // to empty string so a link like
-                //   minis://settings/environments?create_key=GH_TOKEN&create_value=
+                //   miniseuleros://settings/environments?create_key=GH_TOKEN&create_value=
                 // (where `create_value=` is present-but-blank) still opens
                 // the prefilled form. Without create_key, plain navigation
                 // to the Env Vars list.

@@ -63,7 +63,7 @@ object ConfigBridge {
         put(
             "user_message",
             "I tried to change a setting but minis-config is currently disabled. " +
-                "You can enable it at [Settings → Permissions](minis://settings/permissions), " +
+                "You can enable it at [Settings → Permissions](miniseuleros://settings/permissions), " +
                 "then ask me again. Or change the setting yourself directly through the relevant Settings screen."
         )
     }
@@ -731,8 +731,8 @@ object ConfigBridge {
                         put("ok", true)
                         put("applied", applied)
                         put("audit_ids", auditIds)
-                        put("audit_url", "minis://settings/logs?tab=config-audit")
-                        put("user_message", "Settings updated. Review or revert at [Logs → Config Changes](minis://settings/logs?tab=config-audit).")
+                        put("audit_url", "miniseuleros://settings/logs?tab=config-audit")
+                        put("user_message", "Settings updated. Review or revert at [Logs → Config Changes](miniseuleros://settings/logs?tab=config-audit).")
                     }
                 }
             }

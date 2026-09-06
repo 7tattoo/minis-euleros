@@ -146,7 +146,7 @@
     <string name="mcp_add">新增 MCP 伺服器</string>
     <string name="mcp_edit">編輯 MCP 伺服器</string>
     <string name="mcp_section_servers">伺服器</string>
-    <string name="mcp_section_footer">MCP 伺服器讓 AI 透過 minis-mcp-cli 呼叫外部工具。設定儲存在 /var/minis/mcp-servers/servers.json（與 Claude Desktop 相容）。</string>
+    <string name="mcp_section_footer">MCP 伺服器讓 AI 透過 minis-mcp-cli 呼叫外部工具。設定儲存在 /var/minis-euleros/mcp-servers/servers.json（與 Claude Desktop 相容）。</string>
     <string name="mcp_empty_title">尚無 MCP 伺服器</string>
     <string name="mcp_empty_action">點擊 + 按鈕新增伺服器。</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1212,7 +1212,7 @@
     <string name="chat_clear_dialog_body">刪除此會話的所有訊息？工作區檔案、附件和卸載內容會保留。</string>
     <string name="chat_clear_dialog_confirm">清除</string>
     <string name="settings_shared_folders">共享資料夾</string>
-    <string name="settings_shared_folders_subtitle">瀏覽 /var/minis 下的共享、技能、記憶目錄</string>
+    <string name="settings_shared_folders_subtitle">瀏覽 /var/minis-euleros 下的共享、技能、記憶目錄</string>
     <string name="shared_folders_title">共享資料夾</string>
     <string name="shared_folders_info_banner">這些目錄在 Linux 沙箱內可見，技能與記憶由 Minis Agent 工具自動維護，請勿手動修改。</string>
     <string name="shared_folder_name_shared">共享</string>
@@ -1221,7 +1221,7 @@
     <string name="shared_folder_detail_title">資料夾詳情</string>
     <string name="shared_folder_browse_files">瀏覽檔案</string>
     <string name="settings_mount_external_folders">掛載外部資料夾</string>
-    <string name="settings_mount_external_folders_subtitle">將選取的資料夾繫結到 /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">將選取的資料夾繫結到 /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">備份與復原</string>
     <string name="settings_backup_restore_subtitle">匯出加密備份，或從備份復原</string>
     <string name="backup_title">備份與復原</string>
@@ -1408,7 +1408,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">已掛載資料夾</string>
-    <string name="mount_folders_info_banner">選取的資料夾會被繫結到 /var/minis/mounts/&lt;name&gt;。最多可同時掛載 10 個資料夾。</string>
+    <string name="mount_folders_info_banner">選取的資料夾會被繫結到 /var/minis-euleros/mounts/&lt;name&gt;。最多可同時掛載 10 個資料夾。</string>
     <string name="mount_picker_intro_title">選擇要掛載的資料夾</string>
     <string name="mount_picker_intro_message">Android 不允許掛載整個內部儲存空間，請選擇其中一個具體的資料夾，例如「文件」或「下載」。\n\n接下來開啟的是系統檔案選擇器。若某個資料夾顯示「無法使用此資料夾」，請進入它的子資料夾，或用系統返回手勢回到這裡。</string>
     <string name="mount_picker_intro_continue">去選擇</string>
@@ -1418,7 +1418,7 @@
     <string name="mount_add_dialog_title">新增掛載</string>
     <string name="mount_add_source_path">來源路徑</string>
     <string name="mount_add_name_label">掛載名稱</string>
-    <string name="mount_add_name_hint">將作為 /var/minis/mounts/ 下的資料夾名</string>
+    <string name="mount_add_name_hint">將作為 /var/minis-euleros/mounts/ 下的資料夾名</string>
     <string name="mount_add_allow_writes">允許寫入</string>
     <string name="mount_add_allow_writes_desc">關閉後，file_write/file_edit 工具會拒絕寫入；但 shell 仍可繞過此限制。</string>
     <string name="mount_add_confirm">新增</string>

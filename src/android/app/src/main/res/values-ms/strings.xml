@@ -147,7 +147,7 @@
     <string name="mcp_add">Tambah Pelayan MCP</string>
     <string name="mcp_edit">Edit Pelayan MCP</string>
     <string name="mcp_section_servers">Pelayan</string>
-    <string name="mcp_section_footer">Pelayan MCP membolehkan Ejen memanggil alat luaran melalui minis-mcp-cli. Konfigurasi disimpan di /var/minis/mcp-servers/servers.json (serasi dengan Claude Desktop).</string>
+    <string name="mcp_section_footer">Pelayan MCP membolehkan Ejen memanggil alat luaran melalui minis-mcp-cli. Konfigurasi disimpan di /var/minis-euleros/mcp-servers/servers.json (serasi dengan Claude Desktop).</string>
     <string name="mcp_empty_title">Tiada pelayan MCP</string>
     <string name="mcp_empty_action">Tambah pelayan dengan butang +.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1214,7 +1214,7 @@
     <string name="chat_clear_dialog_body">Buang semua mesej daripada sesi ini? Fail dalam ruang kerja, lampiran, dan hasil offload akan dikekalkan.</string>
     <string name="chat_clear_dialog_confirm">Kosongkan</string>
     <string name="settings_shared_folders">Folder Dikongsi</string>
-    <string name="settings_shared_folders_subtitle">Layari /var/minis shared, skills, dan memory</string>
+    <string name="settings_shared_folders_subtitle">Layari /var/minis-euleros shared, skills, dan memory</string>
     <string name="shared_folders_title">Folder Dikongsi</string>
     <string name="shared_folders_info_banner">Direktori ini boleh dilihat di dalam sandbox Linux. Skills dan Memory diselenggara oleh alat Ejen Minis — jangan diedit secara manual.</string>
     <string name="shared_folder_name_shared">Dikongsi</string>
@@ -1223,7 +1223,7 @@
     <string name="shared_folder_detail_title">Butiran Folder</string>
     <string name="shared_folder_browse_files">Layari Fail</string>
     <string name="settings_mount_external_folders">Lekapkan Folder Luaran</string>
-    <string name="settings_mount_external_folders_subtitle">Ikatkan folder pilihan ke /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Ikatkan folder pilihan ke /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">Sandaran &amp; Pemulihan</string>
     <string name="settings_backup_restore_subtitle">Eksport sandaran tersulit, atau pulihkan daripadanya</string>
     <string name="backup_title">Sandaran &amp; Pemulihan</string>
@@ -1410,7 +1410,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Folder Dilekapkan</string>
-    <string name="mount_folders_info_banner">Folder yang dipilih dilekapkan (bind-mount) di /var/minis/mounts/&lt;nama&gt;. Sehingga 10 folder boleh dilekapkan pada satu masa.</string>
+    <string name="mount_folders_info_banner">Folder yang dipilih dilekapkan (bind-mount) di /var/minis-euleros/mounts/&lt;nama&gt;. Sehingga 10 folder boleh dilekapkan pada satu masa.</string>
     <string name="mount_picker_intro_title">Pilih sebuah folder</string>
     <string name="mount_picker_intro_message">Android tidak membenarkan pelekapan keseluruhan storan dalaman — pilih folder tertentu di dalamnya, seperti Documents atau Download.\n\nPemilih fail yang terbuka seterusnya ialah milik sistem. Jika sesebuah folder memaparkan “tidak boleh menggunakan folder ini”, masuk ke salah satu subfoldernya, atau gunakan gerak isyarat Kembali sistem untuk kembali ke sini.</string>
     <string name="mount_picker_intro_continue">Pilih folder</string>
@@ -1420,7 +1420,7 @@
     <string name="mount_add_dialog_title">Tambah Lekapan</string>
     <string name="mount_add_source_path">Laluan sumber</string>
     <string name="mount_add_name_label">Nama lekapan</string>
-    <string name="mount_add_name_hint">Ini akan menjadi nama folder di bawah /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">Ini akan menjadi nama folder di bawah /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">Benarkan penulisan</string>
     <string name="mount_add_allow_writes_desc">Apabila dimatikan, alat file_write/file_edit menolak penulisan; shell masih boleh memintasnya.</string>
     <string name="mount_add_confirm">Tambah</string>

@@ -84,7 +84,7 @@ fun TerminalScreen(
     initCommand: String? = null,
     /**
      * When non-null, binds this terminal to the given chat session —
-     * TerminalSession.start() will chdir into /var/minis and pick up the
+     * TerminalSession.start() will chdir into /var/minis-euleros and pick up the
      * session's env vars (mirrors iOS "Open Terminal" from chat).
      */
     sessionId: String? = null,
@@ -169,7 +169,7 @@ fun TerminalScreen(
     // OSC 1337 MinisOpenURL emitted by `/usr/local/bin/minis-open` is parsed
     // by TerminalEmulator and forwarded to MinisOpenUrlBroker. From the
     // standalone terminal we only route web schemes (http(s)/about) into an
-    // in-app WebView preview; minis://-style chat resources need ChatScreen's
+    // in-app WebView preview; miniseuleros://-style chat resources need ChatScreen's
     // resolver and aren't reachable here, so we still consume them to avoid
     // leaking a stale pendingUrl back to chat on next attach.
     var previewUrl by remember { mutableStateOf<String?>(null) }

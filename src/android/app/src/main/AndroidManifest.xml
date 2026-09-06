@@ -64,7 +64,7 @@
          readdir a mounted external folder. Capped at API 29 — ignored on 11+. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <!-- T219: Mount External Folders bind-mounts SAF-picked tree URIs into
-         /var/minis/mounts/ via PRoot. PRoot's bind translates `readdir(/var/minis/mounts/X)`
+         /var/minis-euleros/mounts/ via PRoot. PRoot's bind translates `readdir(/var/minis-euleros/mounts/X)`
          into a host-side `readdir(/storage/emulated/0/...)` running as the app uid.
          Without MANAGE_EXTERNAL_STORAGE, FuseDaemon (MediaProvider) silently filters
          out files owned by other packages from getdents64 results — so an Obsidian
@@ -205,7 +205,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="minis" />
+                <data android:scheme="miniseuleros" />
             </intent-filter>
         </activity>
 

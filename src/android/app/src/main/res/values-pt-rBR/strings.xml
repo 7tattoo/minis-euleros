@@ -147,7 +147,7 @@
     <string name="mcp_add">Adicionar servidor MCP</string>
     <string name="mcp_edit">Editar servidor MCP</string>
     <string name="mcp_section_servers">Servidores</string>
-    <string name="mcp_section_footer">Os servidores MCP permitem que o Agente chame ferramentas externas via minis-mcp-cli. As configurações ficam em /var/minis/mcp-servers/servers.json (compatível com o Claude Desktop).</string>
+    <string name="mcp_section_footer">Os servidores MCP permitem que o Agente chame ferramentas externas via minis-mcp-cli. As configurações ficam em /var/minis-euleros/mcp-servers/servers.json (compatível com o Claude Desktop).</string>
     <string name="mcp_empty_title">Nenhum servidor MCP</string>
     <string name="mcp_empty_action">Adicione um servidor com o botão +.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1214,7 +1214,7 @@
     <string name="chat_clear_dialog_body">Remover todas as mensagens desta sessão? Os arquivos do espaço de trabalho, os anexos e os dados transferidos são mantidos.</string>
     <string name="chat_clear_dialog_confirm">Limpar</string>
     <string name="settings_shared_folders">Pastas compartilhadas</string>
-    <string name="settings_shared_folders_subtitle">Navegue por /var/minis shared, skills e memory</string>
+    <string name="settings_shared_folders_subtitle">Navegue por /var/minis-euleros shared, skills e memory</string>
     <string name="shared_folders_title">Pastas compartilhadas</string>
     <string name="shared_folders_info_banner">Estes diretórios ficam visíveis dentro do ambiente isolado Linux. Skills e Memory são mantidos pelas ferramentas do Agente Minis — não edite manualmente.</string>
     <string name="shared_folder_name_shared">Compartilhado</string>
@@ -1223,7 +1223,7 @@
     <string name="shared_folder_detail_title">Detalhes da pasta</string>
     <string name="shared_folder_browse_files">Navegar pelos arquivos</string>
     <string name="settings_mount_external_folders">Montar pastas externas</string>
-    <string name="settings_mount_external_folders_subtitle">Vincule as pastas escolhidas a /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Vincule as pastas escolhidas a /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">Backup e restauração</string>
     <string name="settings_backup_restore_subtitle">Exporte um backup criptografado ou restaure a partir de um</string>
     <string name="backup_title">Backup e restauração</string>
@@ -1410,7 +1410,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Pastas montadas</string>
-    <string name="mount_folders_info_banner">As pastas escolhidas são montadas em /var/minis/mounts/&lt;nome&gt;. Dá para montar até 10 pastas ao mesmo tempo.</string>
+    <string name="mount_folders_info_banner">As pastas escolhidas são montadas em /var/minis-euleros/mounts/&lt;nome&gt;. Dá para montar até 10 pastas ao mesmo tempo.</string>
     <string name="mount_picker_intro_title">Escolha uma pasta</string>
     <string name="mount_picker_intro_message">O Android não permite montar todo o armazenamento interno — escolha uma pasta específica dentro dele, como Documents ou Download.\n\nO seletor de arquivos que abre a seguir é do sistema. Se alguma pasta mostrar “não é possível usar esta pasta”, entre em uma das subpastas dela ou volte para cá com o gesto de voltar do sistema.</string>
     <string name="mount_picker_intro_continue">Escolher pasta</string>
@@ -1420,7 +1420,7 @@
     <string name="mount_add_dialog_title">Adicionar montagem</string>
     <string name="mount_add_source_path">Caminho de origem</string>
     <string name="mount_add_name_label">Nome da montagem</string>
-    <string name="mount_add_name_hint">Este será o nome da pasta dentro de /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">Este será o nome da pasta dentro de /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">Permitir gravação</string>
     <string name="mount_add_allow_writes_desc">Quando desligado, as ferramentas file_write/file_edit recusam gravações; o shell ainda consegue contornar isso.</string>
     <string name="mount_add_confirm">Adicionar</string>

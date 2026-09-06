@@ -16,7 +16,7 @@ import java.io.File
  * so file_read paths round-trip across platforms when an Android-offloaded
  * session is opened on iOS (or vice versa) via cloud sync.
  *
- * Linux-visible mount: `/var/minis/offloads/tools/<file>`. The host base
+ * Linux-visible mount: `/var/minis-euleros/offloads/tools/<file>`. The host base
  * `filesDir/minis-sessions/<sid>/offloads` is bind-mounted into the
  * sandbox by [com.miniseuleros.app.sandbox.PRootKernel.perSessionSubdirs]
  * (which already includes the "offloads" subdir — no kernel changes
@@ -24,7 +24,7 @@ import java.io.File
  */
 object ContextOffload {
     /** Linux-side mount point — keep in lock-step with iOS `minisOffloadsLinuxDir`. */
-    const val LINUX_OFFLOADS_DIR = "/var/minis/offloads"
+    const val LINUX_OFFLOADS_DIR = "/var/minis-euleros/offloads"
 
     /** Sentinel prefix on stub strings — the agent loop checks this to skip
      *  re-offloading parts that have already been processed. Mirrors iOS. */

@@ -163,7 +163,7 @@ class ProvidersCollection(
         val resolved = envVars.getValue(key)
             ?: throw ConfigError.InvalidValue(
                 "$fieldName references env var \$\$$key, but no such env var exists. " +
-                    "Create it first via [Set $key](minis://settings/environments?create_key=$key&create_value=)."
+                    "Create it first via [Set $key](miniseuleros://settings/environments?create_key=$key&create_value=)."
             )
         if (resolved.isEmpty()) {
             throw ConfigError.InvalidValue("$fieldName references env var \$\$$key but its value is empty.")

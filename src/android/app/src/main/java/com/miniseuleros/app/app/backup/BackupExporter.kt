@@ -413,7 +413,7 @@ class BackupExporter(
     // MARK: - Shared files / Skills / Memory
 
     /**
-     * §3.2 — the cross-session `/var/minis/shared` bucket. Host-side this is
+     * §3.2 — the cross-session `/var/minis-euleros/shared` bucket. Host-side this is
      * `<filesDir>/minis-global/shared`, NOT anything inside the rootfs.
      */
     private fun exportSharedFiles(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
@@ -778,7 +778,7 @@ class BackupExporter(
         /**
          * Where finished packages live. A sibling of the agent-visible
          * directories, NOT inside `minis-global/shared` — that path is
-         * bind-mounted into the guest at `/var/minis/shared`, so a package
+         * bind-mounted into the guest at `/var/minis-euleros/shared`, so a package
          * (possibly holding API keys) would be readable and deletable by the
          * agent from a shell, and the next backup would sweep the previous one
          * in as user data, nesting packages without bound (§6.2.4).

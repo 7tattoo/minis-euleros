@@ -343,7 +343,7 @@ object DebugMethodRegistry {
             name = "debug.writeFile",
             description = "Write a file into the app's filesDir-rooted Linux-path namespace (resolved through PRoot bind mounts). Intended for staging test fixtures before debug.shellExecute.",
             params = listOf(
-                ParamSpec("path", "string", required = true, description = "Linux path under the proot rootfs (e.g. /tmp/test.sh, /var/minis/skills/example.md)."),
+                ParamSpec("path", "string", required = true, description = "Linux path under the proot rootfs (e.g. /tmp/test.sh, /var/minis-euleros/skills/example.md)."),
                 ParamSpec("content", "string", required = true, description = "File content. Encoded per the 'encoding' field."),
                 ParamSpec("encoding", "string", required = false, default = "utf8", description = "'utf8' or 'base64'."),
                 ParamSpec("overwrite", "bool", required = false, default = true, description = "Whether to overwrite an existing file."),

@@ -122,15 +122,15 @@ class RootfsManager private constructor(private val context: Context) {
             // Write arch marker
             archFile.writeText(ARCH)
 
-            // Pre-create /var/minis directories. Mirrors iOS
+            // Pre-create /var/minis-euleros directories. Mirrors iOS
             // RootfsManager.swift:76-80 (attachments/offloads/workspace/skills/
             // shared) plus Android-specific `memory` kept from prior parity work.
-            // T219-6: also pre-create `mounts/` so PRoot's `-b host:/var/minis/mounts/<name>`
+            // T219-6: also pre-create `mounts/` so PRoot's `-b host:/var/minis-euleros/mounts/<name>`
             // has the parent directory to bind into; without this, PRoot silently
             // skips bind mounts whose target path doesn't exist.
             val minisSubdirs = listOf("attachments", "offloads", "workspace", "skills", "memory", "shared", "mounts")
             for (subdir in minisSubdirs) {
-                File(rootfsDir, "var/minis/$subdir").mkdirs()
+                File(rootfsDir, "var/minis-euleros/$subdir").mkdirs()
             }
 
             // Pre-create /opt/bin — appears in PATH so users can drop third-party

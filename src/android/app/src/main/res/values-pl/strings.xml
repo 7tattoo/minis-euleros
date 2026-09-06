@@ -149,7 +149,7 @@
     <string name="mcp_add">Dodaj serwer MCP</string>
     <string name="mcp_edit">Edytuj serwer MCP</string>
     <string name="mcp_section_servers">Serwery</string>
-    <string name="mcp_section_footer">Serwery MCP pozwalają Agentowi wywoływać zewnętrzne narzędzia przez minis-mcp-cli. Konfiguracje są przechowywane w /var/minis/mcp-servers/servers.json (zgodne z Claude Desktop).</string>
+    <string name="mcp_section_footer">Serwery MCP pozwalają Agentowi wywoływać zewnętrzne narzędzia przez minis-mcp-cli. Konfiguracje są przechowywane w /var/minis-euleros/mcp-servers/servers.json (zgodne z Claude Desktop).</string>
     <string name="mcp_empty_title">Brak serwerów MCP</string>
     <string name="mcp_empty_action">Dodaj serwer przyciskiem +.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1218,7 +1218,7 @@
     <string name="chat_clear_dialog_body">Usunąć wszystkie wiadomości z tej sesji? Pliki w obszarze roboczym, załączniki i dane przeniesione zostaną zachowane.</string>
     <string name="chat_clear_dialog_confirm">Wyczyść</string>
     <string name="settings_shared_folders">Foldery współdzielone</string>
-    <string name="settings_shared_folders_subtitle">Przeglądaj /var/minis shared, skills i memory</string>
+    <string name="settings_shared_folders_subtitle">Przeglądaj /var/minis-euleros shared, skills i memory</string>
     <string name="shared_folders_title">Foldery współdzielone</string>
     <string name="shared_folders_info_banner">Te katalogi są widoczne wewnątrz piaskownicy Linux. Skills i Memory są zarządzane przez narzędzia Agenta Minis — nie edytuj ich ręcznie.</string>
     <string name="shared_folder_name_shared">Współdzielone</string>
@@ -1227,7 +1227,7 @@
     <string name="shared_folder_detail_title">Szczegóły folderu</string>
     <string name="shared_folder_browse_files">Przeglądaj pliki</string>
     <string name="settings_mount_external_folders">Podłącz foldery zewnętrzne</string>
-    <string name="settings_mount_external_folders_subtitle">Powiąż wybrane foldery z /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Powiąż wybrane foldery z /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">Kopia zapasowa i przywracanie</string>
     <string name="settings_backup_restore_subtitle">Wyeksportuj zaszyfrowaną kopię zapasową lub przywróć z niej dane</string>
     <string name="backup_title">Kopia zapasowa i przywracanie</string>
@@ -1414,7 +1414,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Podłączone foldery</string>
-    <string name="mount_folders_info_banner">Wybrane foldery są podłączane w /var/minis/mounts/&lt;nazwa&gt;. Jednocześnie można podłączyć maksymalnie 10 folderów.</string>
+    <string name="mount_folders_info_banner">Wybrane foldery są podłączane w /var/minis-euleros/mounts/&lt;nazwa&gt;. Jednocześnie można podłączyć maksymalnie 10 folderów.</string>
     <string name="mount_picker_intro_title">Wybierz folder</string>
     <string name="mount_picker_intro_message">Android nie pozwala podłączyć całej pamięci wewnętrznej — wybierz konkretny folder wewnątrz niej, np. Documents lub Download.\n\nSelektor plików, który zaraz się otworzy, należy do systemu. Jeśli przy folderze pojawi się komunikat „nie można użyć tego folderu”, wejdź do jednego z jego podfolderów albo wróć tutaj systemowym gestem Wstecz.</string>
     <string name="mount_picker_intro_continue">Wybierz folder</string>
@@ -1424,7 +1424,7 @@
     <string name="mount_add_dialog_title">Dodaj podłączenie</string>
     <string name="mount_add_source_path">Ścieżka źródłowa</string>
     <string name="mount_add_name_label">Nazwa podłączenia</string>
-    <string name="mount_add_name_hint">To będzie nazwa folderu w /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">To będzie nazwa folderu w /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">Zezwól na zapis</string>
     <string name="mount_add_allow_writes_desc">Gdy wyłączone, narzędzia file_write/file_edit odmawiają zapisu; powłoka nadal może to obejść.</string>
     <string name="mount_add_confirm">Dodaj</string>

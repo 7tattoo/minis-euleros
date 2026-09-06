@@ -6,13 +6,13 @@
 # /usr/local/lib/minis-mcp-cli is platform-neutral and is shipped identically
 # on iOS (iSH) and Android (PRoot/EulerOS) — keep it POSIX + dependency-light.
 #
-# Data file: /var/minis/mcp-servers/servers.json (mcpServers object format,
-# Claude-Desktop compatible). Logs: /var/minis/mcp-servers/mcp-cli.log.
+# Data file: /var/minis-euleros/mcp-servers/servers.json (mcpServers object format,
+# Claude-Desktop compatible). Logs: /var/minis-euleros/mcp-servers/mcp-cli.log.
 # Diagnostics go to the log, never to stdout (stdout is reserved for the
 # JSON the agent parses).
 
-LOG="/var/minis/mcp-servers/mcp-cli.log"
-mkdir -p /var/minis/mcp-servers 2>/dev/null
+LOG="/var/minis-euleros/mcp-servers/mcp-cli.log"
+mkdir -p /var/minis-euleros/mcp-servers 2>/dev/null
 _log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG" 2>/dev/null; }
 
 # Ensure python3 is available.

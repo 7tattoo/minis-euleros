@@ -1,7 +1,7 @@
 # MinisApp shell configuration
 # Loaded by /etc/profile via the profile.d mechanism (login shells only).
 
-# T294: prompt parity with iOS — `root@minis:/var/minis#`. iOS bakes the
+# T294: prompt parity with iOS — `root@minis:/var/minis-euleros#`. iOS bakes the
 # literal "minis" into PS1 (the rootfs build script) rather than
 # relying on \h, so the prompt is stable regardless of what /etc/hostname
 # happens to contain. We do the same on Android so a fresh install

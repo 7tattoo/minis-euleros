@@ -270,7 +270,7 @@ private fun HeaderCard(entry: MountedFoldersStore.Entry) {
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "/var/minis/mounts/${entry.name}",
+                    text = "/var/minis-euleros/mounts/${entry.name}",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

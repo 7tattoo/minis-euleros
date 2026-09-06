@@ -17,7 +17,7 @@ import java.io.File
  * Mirrors [SkillRepository] in architecture, but the source of truth for the
  * server list is a single Claude-Desktop-compatible JSON file rather than a
  * SQLite table:
- *   - Server configs live in `/var/minis/mcp-servers/servers.json` (host:
+ *   - Server configs live in `/var/minis-euleros/mcp-servers/servers.json` (host:
  *     `minis-global/mcp-servers/servers.json`) in the `{ "mcpServers": { … } }`
  *     format. This is the SAME file the `minis-mcp-cli` Python tool reads/writes
  *     inside PRoot, and the file browser can edit — so all three surfaces stay
@@ -99,7 +99,7 @@ class MCPRepository(private val context: Context) {
         McpDbHelper(context).writableDatabase
     }
 
-    /** Host dir backing `/var/minis/mcp-servers` (mirrors skills' minis-global dir). */
+    /** Host dir backing `/var/minis-euleros/mcp-servers` (mirrors skills' minis-global dir). */
     private val mcpDir: File
         get() = File(context.filesDir, "minis-global/mcp-servers")
 

@@ -93,14 +93,14 @@ class ExecutionCoordinatorInstrumentedTest {
         assertEquals(6, PRootKernel.bindMounts.size)
 
         // Verify session-level mounts
-        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis/attachments"))
-        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis/offloads"))
-        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis/workspace"))
-        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis/browser"))
+        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/attachments"))
+        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/offloads"))
+        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/workspace"))
+        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/browser"))
 
         // Verify global mounts
-        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis/memory"))
-        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis/skills"))
+        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/memory"))
+        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/skills"))
     }
 
     @Test
@@ -133,13 +133,13 @@ class ExecutionCoordinatorInstrumentedTest {
         val sessionBase = File(context.filesDir, "minis-sessions/$sessionId")
         assertEquals(
             File(sessionBase, "workspace").absolutePath,
-            PRootKernel.bindMounts["/var/minis/workspace"]
+            PRootKernel.bindMounts["/var/minis-euleros/workspace"]
         )
 
         val globalBase = File(context.filesDir, "minis-global")
         assertEquals(
             File(globalBase, "memory").absolutePath,
-            PRootKernel.bindMounts["/var/minis/memory"]
+            PRootKernel.bindMounts["/var/minis-euleros/memory"]
         )
     }
 
@@ -278,27 +278,27 @@ class ExecutionCoordinatorInstrumentedTest {
         // Write file in session A's workspace
         ExecutionCoordinator.execute(
             "session-iso-A",
-            "echo 'from A' > /var/minis/workspace/test.txt"
+            "echo 'from A' > /var/minis-euleros/workspace/test.txt"
         )
 
         // Check it exists in session A
         val resultA = ExecutionCoordinator.execute(
             "session-iso-A",
-            "cat /var/minis/workspace/test.txt"
+            "cat /var/minis-euleros/workspace/test.txt"
         )
         assertTrue(resultA.output.contains("from A"))
 
         // Switch to session B — workspace should be empty
         val resultB = ExecutionCoordinator.execute(
             "session-iso-B",
-            "ls /var/minis/workspace/"
+            "ls /var/minis-euleros/workspace/"
         )
         assertFalse("Session B should not see session A's file", resultB.output.contains("test.txt"))
 
         // Switch back to A — file should still be there
         val resultA2 = ExecutionCoordinator.execute(
             "session-iso-A",
-            "cat /var/minis/workspace/test.txt"
+            "cat /var/minis-euleros/workspace/test.txt"
         )
         assertTrue(resultA2.output.contains("from A"))
     }
@@ -310,13 +310,13 @@ class ExecutionCoordinatorInstrumentedTest {
         // Write file to global memory in session A
         ExecutionCoordinator.execute(
             "session-global-A",
-            "echo 'shared' > /var/minis/memory/shared.txt"
+            "echo 'shared' > /var/minis-euleros/memory/shared.txt"
         )
 
         // Read from session B — should see the same file
         val result = ExecutionCoordinator.execute(
             "session-global-B",
-            "cat /var/minis/memory/shared.txt"
+            "cat /var/minis-euleros/memory/shared.txt"
         )
         assertTrue("Global dirs should be shared", result.output.contains("shared"))
     }

@@ -1031,7 +1031,7 @@ fun ChatScreen(
     }
 
     // App-icon quick action: when the user launched via
-    // `minis://action/camera_chat`, auto-open the camera on first compose.
+    // `miniseuleros://action/camera_chat`, auto-open the camera on first compose.
     // Consumed exactly once so re-entering the chat later does NOT re-trigger.
     // Voice variant lives next to the MicButton because it needs sttAvailable
     // — camera is always available so it can fire from the top-level scope.
@@ -2328,7 +2328,7 @@ fun ChatScreen(
             htmlPreviewFullscreen = false
         }
     }
-    // Pinned-shortcut deep link: minis://session/<id>/<resource-path>
+    // Pinned-shortcut deep link: miniseuleros://session/<id>/<resource-path>
     // consumes here on first composition iff this screen is showing the
     // matching session; opens fullscreen HTML preview backed by a fresh
     // holder. Pending state is left untouched when a different chat is on
@@ -2338,7 +2338,7 @@ fun ChatScreen(
             .pendingHtmlPreview.value ?: return@LaunchedEffect
         if (pending.sessionId != sessionId) return@LaunchedEffect
         com.miniseuleros.app.deeplink.DeepLinkCoordinator.consumePendingHtmlPreview()
-        val absPath = "/var/minis" + pending.resourcePath
+        val absPath = "/var/minis-euleros" + pending.resourcePath
         val file = java.io.File(absPath)
         if (!file.exists()) {
             com.miniseuleros.app.logging.AppLogger.warning(
@@ -2373,7 +2373,7 @@ fun ChatScreen(
     var webAppSheetTarget by remember { mutableStateOf<InputAttachment?>(null) }
     val urlClickHandler = remember<(String) -> Unit>(viewModel) {
         { url ->
-            // Pass the current session id so `minis://attachments/...` resolves
+            // Pass the current session id so `miniseuleros://attachments/...` resolves
             // against this chat's session directory rather than whichever
             // session booted its PRoot shell most recently (which is what
             // the global bindMounts map would answer).
@@ -2429,8 +2429,8 @@ fun ChatScreen(
     // OSC MinisOpenURL marker (via /usr/local/bin/minis-open). The broker is
     // populated by ChatViewModel's shell lineCallback; forwarding the URL
     // into `urlClickHandler` routes it exactly like a chat-link tap —
-    // http(s)/about → UrlPreviewSheet, minis:// deep links → DeepLinkHandler,
-    // minis://<host>/<path> → in-app file preview by extension.
+    // http(s)/about → UrlPreviewSheet, miniseuleros:// deep links → DeepLinkHandler,
+    // miniseuleros://<host>/<path> → in-app file preview by extension.
     val pendingMinisOpenUrl by com.miniseuleros.app.terminal.MinisOpenUrlBroker.pendingUrl
         .collectAsState()
     val minisOpenTerminalVisible by com.miniseuleros.app.terminal.MinisOpenUrlBroker.terminalVisible
@@ -2453,7 +2453,7 @@ fun ChatScreen(
     // matches the standard inline image form; tool-block content stays
     // untouched (toolBlocks live in a separate AssistantBlock list, not
     // in `content`). Video/audio extensions are filtered out so the gallery
-    // only contains still images. Resolution of `minis://` → host File is
+    // only contains still images. Resolution of `miniseuleros://` → host File is
     // deferred to the gallery's Coil model — Coil's MinisImageFetcher walks
     // the same session-aware resolver we use for inline rendering.
     val markdownImageTapHandler = remember<(String, String) -> Unit>(messages, sessionId) {
@@ -2492,7 +2492,7 @@ fun ChatScreen(
                 ?: refs.indexOfFirst { it.source == tappedUrl }.takeIf { it >= 0 }
                 ?: 0
             val items = refs.map { ref ->
-                // Resolve minis://... / file:// / /abs → host File so Coil
+                // Resolve miniseuleros://... / file:// / /abs → host File so Coil
                 // doesn't have to re-walk PRootKernel for every page swipe.
                 // Falls back to the raw URL string when resolution misses —
                 // AsyncImage will route it through MinisImageFetcher anyway.
@@ -2513,7 +2513,7 @@ fun ChatScreen(
         LocalMarkdownUrlClickHandler provides urlClickHandler,
         LocalMarkdownImageTapHandler provides markdownImageTapHandler,
         // Route markdown media resolution through this chat's session so
-        // minis://attachments/* lookups don't rely on the global bindMounts
+        // miniseuleros://attachments/* lookups don't rely on the global bindMounts
         // map (which is last-writer-wins across sessions).
         LocalMarkdownSessionId provides sessionId,
     ) {
@@ -2912,7 +2912,7 @@ fun ChatScreen(
                                 },
                             )
                             MinisMenuDivider()
-                            // Open Terminal (iOS parity) — session-bound, starts in /var/minis
+                            // Open Terminal (iOS parity) — session-bound, starts in /var/minis-euleros
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_menu_open_terminal)) },
                                 onClick = {
@@ -2934,7 +2934,7 @@ fun ChatScreen(
                                     Icon(Icons.Default.Language, contentDescription = null)
                                 },
                             )
-                            // Browse Chat Files (iOS parity) — opens file browser at /var/minis
+                            // Browse Chat Files (iOS parity) — opens file browser at /var/minis-euleros
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_menu_browse_chat_files)) },
                                 onClick = {
@@ -6214,7 +6214,7 @@ fun ChatScreen(
                         }
 
                         // App-icon quick action: when the user launched via
-                        // `minis://action/voice_chat`, auto-fire the mic on
+                        // `miniseuleros://action/voice_chat`, auto-fire the mic on
                         // first compose. Consumed exactly once so re-entering
                         // the chat later does NOT re-trigger.
                         //
@@ -7033,7 +7033,7 @@ fun ChatScreen(
 
     // Fullscreen video player — tapped video link (mp4/mov/m4v/…) from chat
     // markdown. Reuses the same dialog player as the markdown-rendered
-    // ![](minis://...) syntax so behaviour is consistent regardless of how
+    // ![](miniseuleros://...) syntax so behaviour is consistent regardless of how
     // the LLM emitted the reference.
     previewVideoFile?.let { file ->
         com.miniseuleros.app.ui.media.MinisFullscreenVideoPlayer(

@@ -7,8 +7,8 @@
 # host parses and routes to the appropriate built-in viewer:
 #
 #   * http:// https:// about:*                 → in-app WebView preview
-#   * /var/minis/<host>/<path>  (absolute)     → converted to minis://<host>/<path>
-#     minis://attachments/...  minis://workspace/...  minis://shared/... etc.
+#   * /var/minis-euleros/<host>/<path>  (absolute)     → converted to miniseuleros://<host>/<path>
+#     miniseuleros://attachments/...  miniseuleros://workspace/...  miniseuleros://shared/... etc.
 #                                              → routed by extension:
 #                                                 images → image viewer
 #                                                 markdown → markdown preview
@@ -39,25 +39,25 @@ emit() {
             emit_marker "$1"
             printf 'Opened in Minis browser: %s\n' "$1"
             ;;
-        minis://*)
-            # Already a minis:// URL — pass through.
+        miniseuleros://*)
+            # Already a miniseuleros:// URL — pass through.
             emit_marker "$1"
             printf 'Opened in Minis preview: %s\n' "$1"
             ;;
-        /var/minis/*)
-            # Convert /var/minis/<host>/<path> → minis://<host>/<path>
+        /var/minis-euleros/*)
+            # Convert /var/minis-euleros/<host>/<path> → miniseuleros://<host>/<path>
             # so the host can resolve it to the real sandbox location and
             # pick the right in-app preview by extension.
-            rel="${1#/var/minis/}"
+            rel="${1#/var/minis-euleros/}"
             case "$rel" in
                 */*)
                     host="${rel%%/*}"
                     path="${rel#*/}"
-                    emit_marker "minis://$host/$path"
-                    printf 'Opened in Minis preview: minis://%s/%s\n' "$host" "$path"
+                    emit_marker "miniseuleros://$host/$path"
+                    printf 'Opened in Minis preview: miniseuleros://%s/%s\n' "$host" "$path"
                     ;;
                 *)
-                    # e.g. /var/minis/workspace with no trailing path — a bare
+                    # e.g. /var/minis-euleros/workspace with no trailing path — a bare
                     # directory. Not previewable; treat as non-URL.
                     printf 'minis-open: not a previewable resource: %s\n' "$1" >&2
                     return 0
@@ -65,7 +65,7 @@ emit() {
             esac
             ;;
         *)
-            # Non-URL, non-/var/minis path: print a hint but don't fail — mimic
+            # Non-URL, non-/var/minis-euleros path: print a hint but don't fail — mimic
             # xdg-open best-effort so shell scripts that chain it don't abort.
             printf 'minis-open: not a URL or chat resource, ignoring: %s\n' "$1" >&2
             return 0
@@ -75,7 +75,7 @@ emit() {
 
 if [ $# -eq 0 ]; then
     echo "Usage: minis-open <url-or-path>" >&2
-    echo "  url-or-path: http(s):// URL, minis:// URL, or /var/minis/<host>/<path>" >&2
+    echo "  url-or-path: http(s):// URL, miniseuleros:// URL, or /var/minis-euleros/<host>/<path>" >&2
     exit 1
 fi
 

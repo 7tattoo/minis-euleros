@@ -147,7 +147,7 @@
     <string name="mcp_add">MCP サーバーを追加</string>
     <string name="mcp_edit">MCP サーバーを編集</string>
     <string name="mcp_section_servers">サーバー</string>
-    <string name="mcp_section_footer">MCP サーバーを使うと、Agent が minis-mcp-cli を介して外部ツールを呼び出せます。設定は /var/minis/mcp-servers/servers.json に保存されます（Claude Desktop 互換）。</string>
+    <string name="mcp_section_footer">MCP サーバーを使うと、Agent が minis-mcp-cli を介して外部ツールを呼び出せます。設定は /var/minis-euleros/mcp-servers/servers.json に保存されます（Claude Desktop 互換）。</string>
     <string name="mcp_empty_title">MCP サーバーがありません</string>
     <string name="mcp_empty_action">+ ボタンでサーバーを追加します。</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1213,7 +1213,7 @@
     <string name="chat_clear_dialog_body">このセッションのすべてのメッセージを削除しますか？ワークスペースのファイル、添付ファイル、オフロードは保持されます。</string>
     <string name="chat_clear_dialog_confirm">クリア</string>
     <string name="settings_shared_folders">共有フォルダ</string>
-    <string name="settings_shared_folders_subtitle">/var/minis の共有・スキル・メモリを参照</string>
+    <string name="settings_shared_folders_subtitle">/var/minis-euleros の共有・スキル・メモリを参照</string>
     <string name="shared_folders_title">共有フォルダ</string>
     <string name="shared_folders_info_banner">これらのディレクトリは Linux サンドボックス内から参照できます。Skills と Memory は Minis Agent のツールが管理します — 手動で編集しないでください。</string>
     <string name="shared_folder_name_shared">共有</string>
@@ -1222,7 +1222,7 @@
     <string name="shared_folder_detail_title">フォルダの詳細</string>
     <string name="shared_folder_browse_files">ファイルを閲覧</string>
     <string name="settings_mount_external_folders">外部フォルダをマウント</string>
-    <string name="settings_mount_external_folders_subtitle">選択したフォルダを /var/minis/mounts/ にバインド</string>
+    <string name="settings_mount_external_folders_subtitle">選択したフォルダを /var/minis-euleros/mounts/ にバインド</string>
     <string name="settings_backup_restore">バックアップと復元</string>
     <string name="settings_backup_restore_subtitle">暗号化したバックアップを書き出す、またはバックアップから復元します</string>
     <string name="backup_title">バックアップと復元</string>
@@ -1409,7 +1409,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">マウント済みフォルダ</string>
-    <string name="mount_folders_info_banner">選択したフォルダは /var/minis/mounts/&lt;name&gt; にバインドマウントされます。同時に最大 10 個までマウントできます。</string>
+    <string name="mount_folders_info_banner">選択したフォルダは /var/minis-euleros/mounts/&lt;name&gt; にバインドマウントされます。同時に最大 10 個までマウントできます。</string>
     <string name="mount_picker_intro_title">マウントするフォルダを選択</string>
     <string name="mount_picker_intro_message">Android では内部ストレージ全体をマウントできません。ドキュメントやダウンロードなど、その中の具体的なフォルダを選んでください。\n\n次に開くのはシステムのファイル選択画面です。「このフォルダは使用できません」と表示された場合は、サブフォルダに入るか、システムの戻る操作でここに戻ってください。</string>
     <string name="mount_picker_intro_continue">選択する</string>
@@ -1419,7 +1419,7 @@
     <string name="mount_add_dialog_title">マウントを追加</string>
     <string name="mount_add_source_path">ソースパス</string>
     <string name="mount_add_name_label">マウント名</string>
-    <string name="mount_add_name_hint">/var/minis/mounts/ 配下のフォルダ名になります</string>
+    <string name="mount_add_name_hint">/var/minis-euleros/mounts/ 配下のフォルダ名になります</string>
     <string name="mount_add_allow_writes">書き込みを許可</string>
     <string name="mount_add_allow_writes_desc">オフにすると file_write / file_edit ツールは書き込みを拒否しますが、shell からは依然として書き込めます。</string>
     <string name="mount_add_confirm">追加</string>

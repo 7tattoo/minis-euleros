@@ -147,7 +147,7 @@
     <string name="mcp_add">Magdagdag ng MCP Server</string>
     <string name="mcp_edit">I-edit ang MCP Server</string>
     <string name="mcp_section_servers">Mga Server</string>
-    <string name="mcp_section_footer">Pinapayagan ng mga MCP server ang Agent na tumawag ng panlabas na tool sa pamamagitan ng minis-mcp-cli. Nakaimbak ang mga config sa /var/minis/mcp-servers/servers.json (tugma sa Claude Desktop).</string>
+    <string name="mcp_section_footer">Pinapayagan ng mga MCP server ang Agent na tumawag ng panlabas na tool sa pamamagitan ng minis-mcp-cli. Nakaimbak ang mga config sa /var/minis-euleros/mcp-servers/servers.json (tugma sa Claude Desktop).</string>
     <string name="mcp_empty_title">Walang MCP server</string>
     <string name="mcp_empty_action">Magdagdag ng server gamit ang + na button.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1214,7 +1214,7 @@
     <string name="chat_clear_dialog_body">Alisin ang lahat ng mensahe sa session na ito? Mananatili ang mga file sa workspace, mga attachment, at mga offload.</string>
     <string name="chat_clear_dialog_confirm">I-clear</string>
     <string name="settings_shared_folders">Mga Shared na Folder</string>
-    <string name="settings_shared_folders_subtitle">Tingnan ang /var/minis shared, skills, at memory</string>
+    <string name="settings_shared_folders_subtitle">Tingnan ang /var/minis-euleros shared, skills, at memory</string>
     <string name="shared_folders_title">Mga Shared na Folder</string>
     <string name="shared_folders_info_banner">Nakikita ang mga directory na ito sa loob ng Linux sandbox. Pinapamahalaan ng mga tool ng Minis Agent ang Skills at Memory — huwag i-edit nang manu-mano.</string>
     <string name="shared_folder_name_shared">Shared</string>
@@ -1223,7 +1223,7 @@
     <string name="shared_folder_detail_title">Detalye ng Folder</string>
     <string name="shared_folder_browse_files">Tingnan ang Mga File</string>
     <string name="settings_mount_external_folders">I-mount ang Panlabas na Folder</string>
-    <string name="settings_mount_external_folders_subtitle">Iugnay ang mga piniling folder sa /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Iugnay ang mga piniling folder sa /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">Backup at Pagbabalik</string>
     <string name="settings_backup_restore_subtitle">Mag-export ng naka-encrypt na backup, o magbalik mula rito</string>
     <string name="backup_title">Backup at Pagbabalik</string>
@@ -1410,7 +1410,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Mga Naka-mount na Folder</string>
-    <string name="mount_folders_info_banner">Ang mga piniling folder ay naka-bind-mount sa /var/minis/mounts/&lt;pangalan&gt;. Hanggang 10 folder ang puwedeng i-mount nang sabay.</string>
+    <string name="mount_folders_info_banner">Ang mga piniling folder ay naka-bind-mount sa /var/minis-euleros/mounts/&lt;pangalan&gt;. Hanggang 10 folder ang puwedeng i-mount nang sabay.</string>
     <string name="mount_picker_intro_title">Pumili ng folder</string>
     <string name="mount_picker_intro_message">Hindi pinapayagan ng Android ang pag-mount ng buong internal storage — pumili ng partikular na folder sa loob nito, gaya ng Documents o Download.\n\nSa system nagmumula ang file picker na susunod na bubukas. Kung may folder na nagsasabing “hindi magamit ang folder na ito”, pumasok sa isa sa mga subfolder nito, o gamitin ang Back gesture ng system para bumalik dito.</string>
     <string name="mount_picker_intro_continue">Pumili ng folder</string>
@@ -1420,7 +1420,7 @@
     <string name="mount_add_dialog_title">Magdagdag ng Mount</string>
     <string name="mount_add_source_path">Path ng pinagmulan</string>
     <string name="mount_add_name_label">Pangalan ng mount</string>
-    <string name="mount_add_name_hint">Ito ang magiging pangalan ng folder sa ilalim ng /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">Ito ang magiging pangalan ng folder sa ilalim ng /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">Payagan ang pagsulat</string>
     <string name="mount_add_allow_writes_desc">Kapag naka-off, tinatanggihan ng file_write/file_edit ang pagsulat; puwede pa rin itong laktawan ng shell.</string>
     <string name="mount_add_confirm">Idagdag</string>

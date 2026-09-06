@@ -28,7 +28,7 @@ import java.util.TimeZone
  * every invocation emits a JSON envelope
  *   `{ ok, tool, action, data | error, timestamp }`
  * (pretty-printed by default; minified with `--compact`; data-only with `-q`).
- * Screenshots are persisted under `/var/minis/browser/` and referenced via
+ * Screenshots are persisted under `/var/minis-euleros/browser/` and referenced via
  * `image_path` + `minis_url` — raw base64 is only included when the caller
  * explicitly passes `--with-base64`, matching iOS.
  *
@@ -242,7 +242,7 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
         out.put("success", r.success)
         r.pageURL?.takeIf { it.isNotEmpty() }?.let { out.put("page_url", it) }
 
-        // Persist screenshot bytes under /var/minis/browser/ so shells can
+        // Persist screenshot bytes under /var/minis-euleros/browser/ so shells can
         // reference the JPEG via image_path + minis_url instead of piping
         // base64 through stdout.
         val browserHostDir: File? = PRootKernel.resolveHostPath(VAR_MINIS_BROWSER)?.also {
@@ -261,13 +261,13 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
                     val linuxPath = "$VAR_MINIS_BROWSER/$filename"
                     persistedImagePath = linuxPath
                     out.put("image_path", linuxPath)
-                    out.put("minis_url", "minis://browser/$filename")
+                    out.put("minis_url", "miniseuleros://browser/$filename")
                 } else {
                     Log.w(TAG, "Failed to persist screenshot to ${dest.absolutePath}")
                 }
             }
         } else if (!base64.isNullOrEmpty()) {
-            Log.w(TAG, "No /var/minis/browser mount — falling back to base64-only output")
+            Log.w(TAG, "No /var/minis-euleros/browser mount — falling back to base64-only output")
         }
 
         // Fall back to the in-memory host path only when we couldn't persist.
@@ -290,7 +290,7 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
                     val dest = File(browserHostDir, fname)
                     if (runCatching { dest.writeBytes(data) }.isSuccess) {
                         out.put("fetched_path", "$VAR_MINIS_BROWSER/$fname")
-                        out.put("fetched_minis_url", "minis://browser/$fname")
+                        out.put("fetched_minis_url", "miniseuleros://browser/$fname")
                     } else {
                         Log.w(TAG, "Failed to persist fetched file to ${dest.absolutePath}")
                     }
@@ -387,7 +387,7 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
     companion object {
         private const val TAG = "BrowserUseOffload"
         private const val TOOL_NAME = "minis-browser-use"
-        private const val VAR_MINIS_BROWSER = "/var/minis/browser"
+        private const val VAR_MINIS_BROWSER = "/var/minis-euleros/browser"
         private const val EXECUTE_TIMEOUT_MS = 90_000L
 
         /**
@@ -452,7 +452,7 @@ COMMON OPTIONS:
   --tab-id <n>     Route the action to a specific tab (default: active tab)
   --json '<s>'     Pass the full input object as JSON (matches browser_use schema)
   --with-base64    Also include image_base64 in the screenshot output. Off by
-                   default — screenshots are persisted to /var/minis/browser/
+                   default — screenshots are persisted to /var/minis-euleros/browser/
                    and referenced via image_path + minis_url.
   --compact        Minimize JSON output
   -q, --quiet      Output only the data field
@@ -463,13 +463,13 @@ OUTPUT:
     text              Human-readable result the agent would see
     success           true / false
     page_url          URL after the action (when applicable)
-    image_path        Linux path of the persisted JPEG under /var/minis/browser/
-    minis_url         minis://browser/<filename> — stable reference for
+    image_path        Linux path of the persisted JPEG under /var/minis-euleros/browser/
+    minis_url         miniseuleros://browser/<filename> — stable reference for
                       read_image / downstream tools
     image_base64      Base64 JPEG (only when --with-base64 is set)
     fetched_file      Filename of the downloaded resource (fetch action)
-    fetched_path      Linux path of the persisted download under /var/minis/browser/
-    fetched_minis_url minis://browser/<filename> for the download
+    fetched_path      Linux path of the persisted download under /var/minis-euleros/browser/
+    fetched_minis_url miniseuleros://browser/<filename> for the download
 
 EXAMPLES:
   minis-browser-use navigate --url https://example.com

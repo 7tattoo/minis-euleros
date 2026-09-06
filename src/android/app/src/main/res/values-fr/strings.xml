@@ -147,7 +147,7 @@
     <string name="mcp_add">Ajouter un serveur MCP</string>
     <string name="mcp_edit">Modifier le serveur MCP</string>
     <string name="mcp_section_servers">Serveurs</string>
-    <string name="mcp_section_footer">Les serveurs MCP permettent à l’Agent d’appeler des outils externes via minis-mcp-cli. La configuration est stockée dans /var/minis/mcp-servers/servers.json (compatible Claude Desktop).</string>
+    <string name="mcp_section_footer">Les serveurs MCP permettent à l’Agent d’appeler des outils externes via minis-mcp-cli. La configuration est stockée dans /var/minis-euleros/mcp-servers/servers.json (compatible Claude Desktop).</string>
     <string name="mcp_empty_title">Aucun serveur MCP</string>
     <string name="mcp_empty_action">Ajoutez un serveur avec le bouton +.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1214,7 +1214,7 @@
     <string name="chat_clear_dialog_body">Supprimer tous les messages de cette session ? Les fichiers de l\'espace de travail, les pièces jointes et les déchargements sont conservés.</string>
     <string name="chat_clear_dialog_confirm">Effacer</string>
     <string name="settings_shared_folders">Dossiers partagés</string>
-    <string name="settings_shared_folders_subtitle">Parcourir /var/minis : partagé, skills, memory</string>
+    <string name="settings_shared_folders_subtitle">Parcourir /var/minis-euleros : partagé, skills, memory</string>
     <string name="shared_folders_title">Dossiers partagés</string>
     <string name="shared_folders_info_banner">Ces dossiers sont visibles dans le bac à sable Linux. Skills et Memory sont gérés par les outils de Minis Agent — ne les modifiez pas manuellement.</string>
     <string name="shared_folder_name_shared">Partagé</string>
@@ -1223,7 +1223,7 @@
     <string name="shared_folder_detail_title">Détails du dossier</string>
     <string name="shared_folder_browse_files">Parcourir les fichiers</string>
     <string name="settings_mount_external_folders">Monter des dossiers externes</string>
-    <string name="settings_mount_external_folders_subtitle">Lier les dossiers choisis dans /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Lier les dossiers choisis dans /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">Sauvegarde et restauration</string>
     <string name="settings_backup_restore_subtitle">Exporter une sauvegarde chiffrée, ou restaurer à partir d\'une sauvegarde</string>
     <string name="backup_title">Sauvegarde et restauration</string>
@@ -1410,7 +1410,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Dossiers montés</string>
-    <string name="mount_folders_info_banner">Les dossiers choisis sont liés à /var/minis/mounts/&lt;nom&gt;. Jusqu\'à 10 dossiers peuvent être montés simultanément.</string>
+    <string name="mount_folders_info_banner">Les dossiers choisis sont liés à /var/minis-euleros/mounts/&lt;nom&gt;. Jusqu\'à 10 dossiers peuvent être montés simultanément.</string>
     <string name="mount_picker_intro_title">Choisir un dossier</string>
     <string name="mount_picker_intro_message">Android n\'autorise pas le montage de tout le stockage interne — choisissez un dossier précis à l\'intérieur, par exemple Documents ou Téléchargements.\n\nLe sélecteur qui s\'ouvre appartient au système. Si un dossier affiche « impossible d\'utiliser ce dossier », entrez dans un sous-dossier ou revenez ici avec le geste Retour.</string>
     <string name="mount_picker_intro_continue">Choisir</string>
@@ -1420,7 +1420,7 @@
     <string name="mount_add_dialog_title">Ajouter un montage</string>
     <string name="mount_add_source_path">Chemin source</string>
     <string name="mount_add_name_label">Nom du montage</string>
-    <string name="mount_add_name_hint">Sera le nom du dossier sous /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">Sera le nom du dossier sous /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">Autoriser l\'écriture</string>
     <string name="mount_add_allow_writes_desc">Si désactivé, les outils file_write / file_edit refusent les écritures ; le shell peut toujours contourner.</string>
     <string name="mount_add_confirm">Ajouter</string>

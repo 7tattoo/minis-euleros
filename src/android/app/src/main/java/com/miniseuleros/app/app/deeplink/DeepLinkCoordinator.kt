@@ -26,7 +26,7 @@ object DeepLinkCoordinator {
     }
 
     /**
-     * Optional `?tab=…` hint from `minis://settings/logs?tab=config-audit`.
+     * Optional `?tab=…` hint from `miniseuleros://settings/logs?tab=config-audit`.
      * The Logs screen reads this on appear to land on the right
      * segmented-control tab. Cleared by the screen after consumption.
      * Mirrors iOS DeepLinkCoordinator.pendingLogsTab.
@@ -43,7 +43,7 @@ object DeepLinkCoordinator {
 
     /**
      * Pending pinned-shortcut HTML preview: filesystem path + cached title.
-     * MainActivity sets this on `minis://preview/html` deep link; ChatScreen
+     * MainActivity sets this on `miniseuleros://preview/html` deep link; ChatScreen
      * reads it on first composition and routes into WebPreviewFullscreen.
      */
     data class HtmlPreview(val sessionId: String, val resourcePath: String, val title: String)
@@ -66,8 +66,8 @@ object DeepLinkCoordinator {
      * trigger on first compose. Mirrors iOS `pendingChatAction` on
      * AIChatViewModel. Set by [com.miniseuleros.app.MainActivity] /
      * [com.miniseuleros.app.ui.navigation.AppNavigation] when the launch
-     * intent carries `minis://action/voice_chat` or
-     * `minis://action/camera_chat`; consumed exactly once by ChatScreen
+     * intent carries `miniseuleros://action/voice_chat` or
+     * `miniseuleros://action/camera_chat`; consumed exactly once by ChatScreen
      * so re-entering the same chat later doesn't fire the action again.
      */
     enum class ChatAction { START_VOICE, OPEN_CAMERA }

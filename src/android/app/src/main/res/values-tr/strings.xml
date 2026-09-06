@@ -147,7 +147,7 @@
     <string name="mcp_add">MCP Sunucusu Ekle</string>
     <string name="mcp_edit">MCP Sunucusunu Düzenle</string>
     <string name="mcp_section_servers">Sunucular</string>
-    <string name="mcp_section_footer">MCP sunucuları, Agent\'ın minis-mcp-cli aracılığıyla dış araçları çağırmasını sağlar. Yapılandırmalar /var/minis/mcp-servers/servers.json içinde saklanır (Claude Desktop ile uyumlu).</string>
+    <string name="mcp_section_footer">MCP sunucuları, Agent\'ın minis-mcp-cli aracılığıyla dış araçları çağırmasını sağlar. Yapılandırmalar /var/minis-euleros/mcp-servers/servers.json içinde saklanır (Claude Desktop ile uyumlu).</string>
     <string name="mcp_empty_title">MCP sunucusu yok</string>
     <string name="mcp_empty_action">+ düğmesiyle bir sunucu ekleyin.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1214,7 +1214,7 @@
     <string name="chat_clear_dialog_body">Bu oturumdaki tüm mesajlar kaldırılsın mı? Çalışma alanındaki dosyalar, ekler ve aktarılan içerikler korunur.</string>
     <string name="chat_clear_dialog_confirm">Temizle</string>
     <string name="settings_shared_folders">Paylaşılan Klasörler</string>
-    <string name="settings_shared_folders_subtitle">/var/minis shared, skills ve memory klasörlerine göz atın</string>
+    <string name="settings_shared_folders_subtitle">/var/minis-euleros shared, skills ve memory klasörlerine göz atın</string>
     <string name="shared_folders_title">Paylaşılan Klasörler</string>
     <string name="shared_folders_info_banner">Bu dizinler Linux sanal alanı içinden görünür. Skills ve Memory, Minis Agent araçlarınca yönetilir — elle düzenlemeyin.</string>
     <string name="shared_folder_name_shared">Paylaşılan</string>
@@ -1223,7 +1223,7 @@
     <string name="shared_folder_detail_title">Klasör Ayrıntıları</string>
     <string name="shared_folder_browse_files">Dosyalara Göz At</string>
     <string name="settings_mount_external_folders">Dış Klasörleri Bağla</string>
-    <string name="settings_mount_external_folders_subtitle">Seçilen klasörleri /var/minis/mounts/ altına bağlayın</string>
+    <string name="settings_mount_external_folders_subtitle">Seçilen klasörleri /var/minis-euleros/mounts/ altına bağlayın</string>
     <string name="settings_backup_restore">Yedekleme ve Geri Yükleme</string>
     <string name="settings_backup_restore_subtitle">Şifrelenmiş bir yedek dışa aktarın ya da yedekten geri yükleyin</string>
     <string name="backup_title">Yedekleme ve Geri Yükleme</string>
@@ -1410,7 +1410,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Bağlı Klasörler</string>
-    <string name="mount_folders_info_banner">Seçilen klasörler /var/minis/mounts/&lt;ad&gt; altına bağlanır. Aynı anda en fazla 10 klasör bağlanabilir.</string>
+    <string name="mount_folders_info_banner">Seçilen klasörler /var/minis-euleros/mounts/&lt;ad&gt; altına bağlanır. Aynı anda en fazla 10 klasör bağlanabilir.</string>
     <string name="mount_picker_intro_title">Bir klasör seçin</string>
     <string name="mount_picker_intro_message">Android, dahili depolamanın tamamının bağlanmasına izin vermez — içindeki belirli bir klasörü seçin, örneğin Documents ya da Download.\n\nSonraki adımda açılan dosya seçici sisteme aittir. Bir klasör “bu klasör kullanılamıyor” diyorsa alt klasörlerinden birine girin ya da sistemin Geri hareketiyle buraya dönün.</string>
     <string name="mount_picker_intro_continue">Klasör seç</string>
@@ -1420,7 +1420,7 @@
     <string name="mount_add_dialog_title">Bağlama Ekle</string>
     <string name="mount_add_source_path">Kaynak yolu</string>
     <string name="mount_add_name_label">Bağlama adı</string>
-    <string name="mount_add_name_hint">Bu, /var/minis/mounts/ altındaki klasör adı olacak</string>
+    <string name="mount_add_name_hint">Bu, /var/minis-euleros/mounts/ altındaki klasör adı olacak</string>
     <string name="mount_add_allow_writes">Yazmaya izin ver</string>
     <string name="mount_add_allow_writes_desc">Kapalıyken file_write/file_edit araçları yazmayı reddeder; shell yine de bunu aşabilir.</string>
     <string name="mount_add_confirm">Ekle</string>

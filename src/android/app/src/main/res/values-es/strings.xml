@@ -147,7 +147,7 @@
     <string name="mcp_add">Agregar servidor MCP</string>
     <string name="mcp_edit">Editar servidor MCP</string>
     <string name="mcp_section_servers">Servidores</string>
-    <string name="mcp_section_footer">Los servidores MCP permiten que Minis Agent llame a herramientas externas mediante minis-mcp-cli. Las configuraciones se guardan en /var/minis/mcp-servers/servers.json (compatible con Claude Desktop).</string>
+    <string name="mcp_section_footer">Los servidores MCP permiten que Minis Agent llame a herramientas externas mediante minis-mcp-cli. Las configuraciones se guardan en /var/minis-euleros/mcp-servers/servers.json (compatible con Claude Desktop).</string>
     <string name="mcp_empty_title">Sin servidores MCP</string>
     <string name="mcp_empty_action">Agrega un servidor con el botón +.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1214,7 +1214,7 @@
     <string name="chat_clear_dialog_body">¿Quitar todos los mensajes de esta sesión? Se conservan los archivos del espacio de trabajo, los adjuntos y los offloads.</string>
     <string name="chat_clear_dialog_confirm">Borrar</string>
     <string name="settings_shared_folders">Carpetas compartidas</string>
-    <string name="settings_shared_folders_subtitle">Explorar /var/minis shared, skills y memory</string>
+    <string name="settings_shared_folders_subtitle">Explorar /var/minis-euleros shared, skills y memory</string>
     <string name="shared_folders_title">Carpetas compartidas</string>
     <string name="shared_folders_info_banner">Estos directorios son visibles dentro del entorno aislado de Linux. Skills y Memory los mantienen las herramientas de Minis Agent: no los edites manualmente.</string>
     <string name="shared_folder_name_shared">Compartido</string>
@@ -1223,7 +1223,7 @@
     <string name="shared_folder_detail_title">Detalles de la carpeta</string>
     <string name="shared_folder_browse_files">Explorar archivos</string>
     <string name="settings_mount_external_folders">Montar carpetas externas</string>
-    <string name="settings_mount_external_folders_subtitle">Vincula las carpetas elegidas en /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Vincula las carpetas elegidas en /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">Copia de seguridad &amp; restauración</string>
     <string name="settings_backup_restore_subtitle">Exporta una copia de seguridad cifrada o restaura desde otra</string>
     <string name="backup_title">Copia de seguridad &amp; restauración</string>
@@ -1410,7 +1410,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Carpetas montadas</string>
-    <string name="mount_folders_info_banner">Las carpetas elegidas se montan con bind en /var/minis/mounts/&lt;name&gt;. Se pueden montar hasta 10 carpetas a la vez.</string>
+    <string name="mount_folders_info_banner">Las carpetas elegidas se montan con bind en /var/minis-euleros/mounts/&lt;name&gt;. Se pueden montar hasta 10 carpetas a la vez.</string>
     <string name="mount_picker_intro_title">Elige una carpeta</string>
     <string name="mount_picker_intro_message">Android no permite montar todo el almacenamiento interno: elige una carpeta específica dentro de él, como Documents o Download.\n\nEl selector de archivos que se abre a continuación pertenece al sistema. Si una carpeta muestra \u201cno se puede usar esta carpeta\u201d, entra en una de sus subcarpetas o usa el gesto Atrás del sistema para volver aquí.</string>
     <string name="mount_picker_intro_continue">Elegir carpeta</string>
@@ -1420,7 +1420,7 @@
     <string name="mount_add_dialog_title">Agregar montaje</string>
     <string name="mount_add_source_path">Ruta de origen</string>
     <string name="mount_add_name_label">Nombre del montaje</string>
-    <string name="mount_add_name_hint">Este será el nombre de la carpeta dentro de /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">Este será el nombre de la carpeta dentro de /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">Permitir escritura</string>
     <string name="mount_add_allow_writes_desc">Si se desactiva, las herramientas file_write/file_edit rechazan las escrituras; la shell todavía puede evadirlo.</string>
     <string name="mount_add_confirm">Agregar</string>

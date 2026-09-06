@@ -43,7 +43,7 @@ import com.miniseuleros.app.R
  * Settings → Shared Folders. Mirrors iOS SharedFoldersView.
  *
  * Three fixed entries — Shared (R/W), Skills (read-only), Memory (read-only) —
- * exposing the first-class /var/minis/{shared,skills,memory} dirs to a native
+ * exposing the first-class /var/minis-euleros/{shared,skills,memory} dirs to a native
  * browse UI. Skills and Memory are agent-tool-maintained and intentionally
  * read-only here so the user doesn't desync them by hand.
  */
@@ -188,7 +188,7 @@ internal object SharedFolderRegistry {
         SharedFolderEntry(
             id = "shared",
             nameRes = R.string.shared_folder_name_shared,
-            linuxPath = "/var/minis/shared",
+            linuxPath = "/var/minis-euleros/shared",
             writable = true,
             icon = Icons.Outlined.Folder,
             iconColor = Color(0xFF007AFF),
@@ -196,7 +196,7 @@ internal object SharedFolderRegistry {
         SharedFolderEntry(
             id = "skills",
             nameRes = R.string.shared_folder_name_skills,
-            linuxPath = "/var/minis/skills",
+            linuxPath = "/var/minis-euleros/skills",
             writable = false,
             icon = Icons.Outlined.AutoAwesome,
             iconColor = Color(0xFFAF52DE),
@@ -204,7 +204,7 @@ internal object SharedFolderRegistry {
         SharedFolderEntry(
             id = "memory",
             nameRes = R.string.shared_folder_name_memory,
-            linuxPath = "/var/minis/memory",
+            linuxPath = "/var/minis-euleros/memory",
             writable = false,
             icon = Icons.Outlined.Psychology,
             iconColor = Color(0xFFFF2D55),

@@ -9,7 +9,7 @@ import os
 import shutil
 import subprocess
 
-LOG_PATH = "/var/minis/mcp-servers/mcp-cli.log"
+LOG_PATH = "/var/minis-euleros/mcp-servers/mcp-cli.log"
 
 
 def _log(msg):

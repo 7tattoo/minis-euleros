@@ -147,7 +147,7 @@
     <string name="mcp_add">เพิ่มเซิร์ฟเวอร์ MCP</string>
     <string name="mcp_edit">แก้ไขเซิร์ฟเวอร์ MCP</string>
     <string name="mcp_section_servers">เซิร์ฟเวอร์</string>
-    <string name="mcp_section_footer">เซิร์ฟเวอร์ MCP ช่วยให้ Agent เรียกใช้เครื่องมือภายนอกผ่าน minis-mcp-cli ได้ การตั้งค่าถูกเก็บไว้ที่ /var/minis/mcp-servers/servers.json (ใช้ร่วมกับ Claude Desktop ได้)</string>
+    <string name="mcp_section_footer">เซิร์ฟเวอร์ MCP ช่วยให้ Agent เรียกใช้เครื่องมือภายนอกผ่าน minis-mcp-cli ได้ การตั้งค่าถูกเก็บไว้ที่ /var/minis-euleros/mcp-servers/servers.json (ใช้ร่วมกับ Claude Desktop ได้)</string>
     <string name="mcp_empty_title">ไม่มีเซิร์ฟเวอร์ MCP</string>
     <string name="mcp_empty_action">เพิ่มเซิร์ฟเวอร์ด้วยปุ่ม +</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1214,7 +1214,7 @@
     <string name="chat_clear_dialog_body">ลบข้อความทั้งหมดในเซสชันนี้หรือไม่ ไฟล์ในพื้นที่ทำงาน ไฟล์แนบ และไฟล์ที่ถ่ายโอนไว้จะยังคงอยู่</string>
     <string name="chat_clear_dialog_confirm">ล้าง</string>
     <string name="settings_shared_folders">โฟลเดอร์ที่ใช้ร่วมกัน</string>
-    <string name="settings_shared_folders_subtitle">เรียกดู /var/minis shared, skills และ memory</string>
+    <string name="settings_shared_folders_subtitle">เรียกดู /var/minis-euleros shared, skills และ memory</string>
     <string name="shared_folders_title">โฟลเดอร์ที่ใช้ร่วมกัน</string>
     <string name="shared_folders_info_banner">ไดเรกทอรีเหล่านี้มองเห็นได้จากภายในแซนด์บ็อกซ์ Linux ส่วน Skills และ Memory ดูแลโดยเครื่องมือของ Minis Agent — อย่าแก้ไขด้วยตนเอง</string>
     <string name="shared_folder_name_shared">ใช้ร่วมกัน</string>
@@ -1223,7 +1223,7 @@
     <string name="shared_folder_detail_title">รายละเอียดโฟลเดอร์</string>
     <string name="shared_folder_browse_files">เรียกดูไฟล์</string>
     <string name="settings_mount_external_folders">เมานต์โฟลเดอร์ภายนอก</string>
-    <string name="settings_mount_external_folders_subtitle">ผูกโฟลเดอร์ที่เลือกไว้กับ /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">ผูกโฟลเดอร์ที่เลือกไว้กับ /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">สำรองและกู้คืน</string>
     <string name="settings_backup_restore_subtitle">ส่งออกข้อมูลสำรองแบบเข้ารหัส หรือกู้คืนจากข้อมูลสำรอง</string>
     <string name="backup_title">สำรองและกู้คืน</string>
@@ -1410,7 +1410,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">โฟลเดอร์ที่เมานต์ไว้</string>
-    <string name="mount_folders_info_banner">โฟลเดอร์ที่เลือกจะถูกผูก (bind-mount) ไว้ที่ /var/minis/mounts/&lt;ชื่อ&gt; เมานต์ได้สูงสุด 10 โฟลเดอร์พร้อมกัน</string>
+    <string name="mount_folders_info_banner">โฟลเดอร์ที่เลือกจะถูกผูก (bind-mount) ไว้ที่ /var/minis-euleros/mounts/&lt;ชื่อ&gt; เมานต์ได้สูงสุด 10 โฟลเดอร์พร้อมกัน</string>
     <string name="mount_picker_intro_title">เลือกโฟลเดอร์</string>
     <string name="mount_picker_intro_message">Android ไม่อนุญาตให้เมานต์พื้นที่จัดเก็บภายในทั้งหมด — ให้เลือกโฟลเดอร์เฉพาะภายใน เช่น Documents หรือ Download\n\nตัวเลือกไฟล์ที่จะเปิดขึ้นถัดไปเป็นของระบบ หากโฟลเดอร์ใดขึ้นว่า “ใช้โฟลเดอร์นี้ไม่ได้” ให้เข้าไปในโฟลเดอร์ย่อยของมัน หรือใช้ท่าทางย้อนกลับของระบบเพื่อกลับมาที่นี่</string>
     <string name="mount_picker_intro_continue">เลือกโฟลเดอร์</string>
@@ -1420,7 +1420,7 @@
     <string name="mount_add_dialog_title">เพิ่มการเมานต์</string>
     <string name="mount_add_source_path">พาธต้นทาง</string>
     <string name="mount_add_name_label">ชื่อการเมานต์</string>
-    <string name="mount_add_name_hint">ชื่อนี้จะกลายเป็นชื่อโฟลเดอร์ภายใต้ /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">ชื่อนี้จะกลายเป็นชื่อโฟลเดอร์ภายใต้ /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">อนุญาตให้เขียน</string>
     <string name="mount_add_allow_writes_desc">เมื่อปิด เครื่องมือ file_write/file_edit จะปฏิเสธการเขียน แต่ shell ยังข้ามข้อจำกัดนี้ได้</string>
     <string name="mount_add_confirm">เพิ่ม</string>

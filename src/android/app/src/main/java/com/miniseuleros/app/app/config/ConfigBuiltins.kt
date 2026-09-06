@@ -988,7 +988,7 @@ internal object ConfigBuiltins {
         // [T-android-soul-custom-icon][T-android-soul-icon-config-images]
         //
         // Accepts an emoji OR an image, matching iOS `fe2f3ae8b`. An address
-        // (minis:// or a /var/minis path) is only an import source: it is
+        // (miniseuleros:// or a /var/minis-euleros path) is only an import source: it is
         // resolved, re-encoded through the SAME SoulIcon.encode the Settings
         // picker uses, and only the RESULT is stored inline — so the source
         // file can be deleted afterwards and the icon survives attachment
@@ -1020,8 +1020,8 @@ internal object ConfigBuiltins {
                     "IMAGE — any of these forms:\n" +
                     "  • data URI: data:image/png;base64,iVBORw0KGgo...\n" +
                     "  • bare base64 (no data: prefix) — auto-detected\n" +
-                    "  • minis:// resource, e.g. minis://attachments/icon.png\n" +
-                    "  • a path inside the minis directories, e.g. /var/minis/attachments/icon.png\n" +
+                    "  • miniseuleros:// resource, e.g. miniseuleros://attachments/icon.png\n" +
+                    "  • a path inside the minis directories, e.g. /var/minis-euleros/attachments/icon.png\n" +
                     "  Remote http(s) URLs are NOT supported on Android — download the file first, " +
                     "then pass its path.\n" +
                     "\n" +
@@ -1037,7 +1037,7 @@ internal object ConfigBuiltins {
                     "\n" +
                     "EXAMPLES (the value is JSON, so the string needs its own quotes)\n" +
                     "  minis-config set soul.icon '\"⚡\"'\n" +
-                    "  minis-config set soul.icon '\"minis://attachments/icon.png\"'\n" +
+                    "  minis-config set soul.icon '\"miniseuleros://attachments/icon.png\"'\n" +
                     "  minis-config set soul.icon '\"\"'   # back to the default sparkle",
                 // No maxLength: an inline data URI is far longer than any cap
                 // that would make sense stated in characters. The real bound

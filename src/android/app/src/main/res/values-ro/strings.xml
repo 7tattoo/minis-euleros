@@ -148,7 +148,7 @@
     <string name="mcp_add">Adaugă server MCP</string>
     <string name="mcp_edit">Editează serverul MCP</string>
     <string name="mcp_section_servers">Servere</string>
-    <string name="mcp_section_footer">Serverele MCP permit Agentului să apeleze instrumente externe prin minis-mcp-cli. Configurațiile sunt stocate în /var/minis/mcp-servers/servers.json (compatibil cu Claude Desktop).</string>
+    <string name="mcp_section_footer">Serverele MCP permit Agentului să apeleze instrumente externe prin minis-mcp-cli. Configurațiile sunt stocate în /var/minis-euleros/mcp-servers/servers.json (compatibil cu Claude Desktop).</string>
     <string name="mcp_empty_title">Niciun server MCP</string>
     <string name="mcp_empty_action">Adaugă un server cu butonul +.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1216,7 +1216,7 @@
     <string name="chat_clear_dialog_body">Elimini toate mesajele din această sesiune? Fișierele din spațiul de lucru, atașamentele și datele transferate se păstrează.</string>
     <string name="chat_clear_dialog_confirm">Golește</string>
     <string name="settings_shared_folders">Dosare partajate</string>
-    <string name="settings_shared_folders_subtitle">Răsfoiește /var/minis shared, skills și memory</string>
+    <string name="settings_shared_folders_subtitle">Răsfoiește /var/minis-euleros shared, skills și memory</string>
     <string name="shared_folders_title">Dosare partajate</string>
     <string name="shared_folders_info_banner">Aceste directoare sunt vizibile în interiorul mediului izolat Linux. Skills și Memory sunt gestionate de instrumentele Agentului Minis — nu le edita manual.</string>
     <string name="shared_folder_name_shared">Partajat</string>
@@ -1225,7 +1225,7 @@
     <string name="shared_folder_detail_title">Detaliile dosarului</string>
     <string name="shared_folder_browse_files">Răsfoiește fișierele</string>
     <string name="settings_mount_external_folders">Montează dosare externe</string>
-    <string name="settings_mount_external_folders_subtitle">Leagă dosarele alese la /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Leagă dosarele alese la /var/minis-euleros/mounts/</string>
     <string name="settings_backup_restore">Copie de rezervă și restaurare</string>
     <string name="settings_backup_restore_subtitle">Exportă o copie de rezervă criptată sau restaurează dintr-una</string>
     <string name="backup_title">Copie de rezervă și restaurare</string>
@@ -1412,7 +1412,7 @@
     <string name="backup_dest_backend_label">%1$s — %2$s</string>
     <string name="backup_dest_row_subtitle">%1$s · /%2$s</string>
     <string name="mount_folders_title">Dosare montate</string>
-    <string name="mount_folders_info_banner">Dosarele alese sunt montate la /var/minis/mounts/&lt;nume&gt;. Pot fi montate cel mult 10 dosare simultan.</string>
+    <string name="mount_folders_info_banner">Dosarele alese sunt montate la /var/minis-euleros/mounts/&lt;nume&gt;. Pot fi montate cel mult 10 dosare simultan.</string>
     <string name="mount_picker_intro_title">Alege un dosar</string>
     <string name="mount_picker_intro_message">Android nu permite montarea întregii memorii interne — alege un dosar anume din ea, precum Documents sau Download.\n\nSelectorul de fișiere care se deschide în continuare aparține sistemului. Dacă un dosar afișează „acest dosar nu poate fi folosit”, intră într-unul dintre subdosarele lui sau revino aici cu gestul de întoarcere al sistemului.</string>
     <string name="mount_picker_intro_continue">Alege dosarul</string>
@@ -1422,7 +1422,7 @@
     <string name="mount_add_dialog_title">Adaugă o montare</string>
     <string name="mount_add_source_path">Calea sursei</string>
     <string name="mount_add_name_label">Numele montării</string>
-    <string name="mount_add_name_hint">Acesta va fi numele dosarului din /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">Acesta va fi numele dosarului din /var/minis-euleros/mounts/</string>
     <string name="mount_add_allow_writes">Permite scrierea</string>
     <string name="mount_add_allow_writes_desc">Când este dezactivată, instrumentele file_write/file_edit refuză scrierea; shell-ul poate totuși ocoli restricția.</string>
     <string name="mount_add_confirm">Adaugă</string>

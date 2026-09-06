@@ -14,13 +14,13 @@ import okio.source
 import java.io.File
 
 /**
- * Coil Fetcher that resolves `minis://` URIs to local files.
+ * Coil Fetcher that resolves `miniseuleros://` URIs to local files.
  *
  * Usage: Register with ImageLoader.Builder().components {
  *     add(MinisImageFetcher.Factory())
  * }
  *
- * minis://attachments/foo.jpg → /var/minis/attachments/foo.jpg → host path
+ * miniseuleros://attachments/foo.jpg → /var/minis-euleros/attachments/foo.jpg → host path
  */
 class MinisImageFetcher(
     private val uri: String,
@@ -28,11 +28,11 @@ class MinisImageFetcher(
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult {
-        // Strip minis:// prefix, drop any ?query, and percent-decode so
+        // Strip miniseuleros:// prefix, drop any ?query, and percent-decode so
         // Chinese/emoji/space filenames resolve to the actual on-disk file.
-        val stripped = uri.removePrefix("minis://").substringBefore('?')
+        val stripped = uri.removePrefix("miniseuleros://").substringBefore('?')
         val decoded = java.net.URLDecoder.decode(stripped, "UTF-8")
-        val linuxPath = "/var/minis/$decoded"
+        val linuxPath = "/var/minis-euleros/$decoded"
         val hostFile = PRootKernel.resolveHostPath(linuxPath)
             ?: throw IllegalArgumentException("Cannot resolve path: $linuxPath")
 
@@ -67,27 +67,27 @@ class MinisImageFetcher(
      */
     class Factory : Fetcher.Factory<String> {
         override fun create(data: String, options: Options, imageLoader: ImageLoader): Fetcher? {
-            if (!data.startsWith("minis://")) return null
+            if (!data.startsWith("miniseuleros://")) return null
             return MinisImageFetcher(data, options)
         }
     }
 
     /**
      * Uri factory — the path the Markdown renderer hits. Coil's default
-     * StringMapper converts an `AsyncImage(model = "minis://…")` String into
+     * StringMapper converts an `AsyncImage(model = "miniseuleros://…")` String into
      * an android.net.Uri before fetcher resolution, so the String factory
      * above is never consulted for markdown images. Match on scheme here.
      */
     class UriFactory : Fetcher.Factory<Uri> {
         override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
-            if (data.scheme != "minis") return null
+            if (data.scheme != "miniseuleros") return null
             return MinisImageFetcher(data.toString(), options)
         }
     }
 
     /**
      * T-image-cache-mtime-35133: Bust Coil's memory + disk cache when a
-     * `minis://` file is overwritten in-place (e.g. Grok regenerating an
+     * `miniseuleros://` file is overwritten in-place (e.g. Grok regenerating an
      * image to the same `attachments/cat.jpg`). Without this, Coil keys
      * off the URI alone and keeps serving the previous bitmap; only the
      * ToolDetailSheet — which reads the File directly — saw the new bytes.
@@ -102,14 +102,14 @@ class MinisImageFetcher(
      */
     class MtimeKeyer : Keyer<Uri> {
         override fun key(data: Uri, options: Options): String? {
-            if (data.scheme != "minis") return null
+            if (data.scheme != "miniseuleros") return null
             return composeMtimeKey(data.toString())
         }
     }
 
     class StringMtimeKeyer : Keyer<String> {
         override fun key(data: String, options: Options): String? {
-            if (!data.startsWith("minis://")) return null
+            if (!data.startsWith("miniseuleros://")) return null
             return composeMtimeKey(data)
         }
     }
@@ -119,13 +119,13 @@ class MinisImageFetcher(
             // Resolve once to fetch mtime. Cheap (single stat on host fs);
             // Coil only calls Keyer when computing/looking up cache keys,
             // not on every recomposition.
-            val stripped = uri.removePrefix("minis://").substringBefore('?')
+            val stripped = uri.removePrefix("miniseuleros://").substringBefore('?')
             val decoded = try {
                 java.net.URLDecoder.decode(stripped, "UTF-8")
             } catch (_: Throwable) {
                 stripped
             }
-            val linuxPath = "/var/minis/$decoded"
+            val linuxPath = "/var/minis-euleros/$decoded"
             val mtime = try {
                 PRootKernel.resolveHostPath(linuxPath)?.lastModified() ?: 0L
             } catch (_: Throwable) {

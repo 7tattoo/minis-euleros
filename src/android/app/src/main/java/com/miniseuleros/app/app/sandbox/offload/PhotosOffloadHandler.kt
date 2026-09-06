@@ -455,9 +455,9 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
     /**
      * Copy the asset bytes into the CALLING SESSION's offloads dir
      * (`<filesDir>/minis-sessions/<sessionId>/offloads/`) and report the
-     * sandbox-visible `/var/minis/offloads/<name>` path plus a `minis://`
+     * sandbox-visible `/var/minis-euleros/offloads/<name>` path plus a `miniseuleros://`
      * URL, matching iOS `PhotosOffload.m` (which exports to
-     * `/var/minis/offloads/` directly).
+     * `/var/minis-euleros/offloads/` directly).
      *
      * [GH#139] This used to write to `<filesDir>/photos-export/` and return
      * only `host_path`. That path is inside no PRoot bind mount, so the
@@ -524,7 +524,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
         )
 
         // [GH#139] Session-scoped when we know the caller's chat, so the export
-        // lands in the dir PRoot bind-mounts at /var/minis/offloads for THIS
+        // lands in the dir PRoot bind-mounts at /var/minis-euleros/offloads for THIS
         // session. Mirrors ModelUseOffloadHandler.sessionScopedHostFile and
         // PRootKernel.resolveSessionHostPath, which use the same layout.
         val sandboxVisible = sessionId != null
@@ -556,11 +556,11 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 .put("format", if (size == "original") "original" else "jpeg")
                 .put("export_size", size)
             // [GH#139] Hand back the paths the agent can actually USE: the
-            // sandbox path for shell tools, and the minis:// URL that
+            // sandbox path for shell tools, and the miniseuleros:// URL that
             // `minis-open` accepts for in-chat preview / model rendering.
             if (sandboxVisible) {
-                data.put("linux_path", "/var/minis/offloads/${outFile.name}")
-                    .put("minis_url", "minis://offloads/${outFile.name}")
+                data.put("linux_path", "/var/minis-euleros/offloads/${outFile.name}")
+                    .put("minis_url", "miniseuleros://offloads/${outFile.name}")
                     .put(
                         "note",
                         "Exported into this chat's offloads dir. Use `linux_path` from shell " +
@@ -572,7 +572,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                     "No chat session for this offload (interactive terminal), so the export " +
                         "went to app-private storage: `host_path` is NOT reachable from the " +
                         "Linux sandbox and minis-open cannot open it. Run the export from a " +
-                        "chat to get a /var/minis/offloads path.",
+                        "chat to get a /var/minis-euleros/offloads path.",
                 )
             }
             if (width > 0) data.put("width", width)
@@ -1050,8 +1050,8 @@ Android edge cases vs apple-photos:
     RecoverableSecurityException. Surfaced as `error: write_denied`
     since the CLI sandbox can't show the system consent dialog.
   - Export writes into the calling chat's offloads dir and returns
-    `linux_path` (/var/minis/offloads/...) and `minis_url`
-    (minis://offloads/...) alongside `host_path`, matching iOS. Outside a
+    `linux_path` (/var/minis-euleros/offloads/...) and `minis_url`
+    (miniseuleros://offloads/...) alongside `host_path`, matching iOS. Outside a
     chat (interactive terminal) there is no session dir, so only
     `host_path` is returned and the note says it is not reachable from
     the Linux sandbox.

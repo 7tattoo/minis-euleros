@@ -151,7 +151,7 @@ class ModelUseOffloadHandler(
                 JSONObject().put("error", "invalid_output_path")
                     .put(
                         "message",
-                        "--output must be an absolute path (e.g. /var/minis/workspace/out.jpg). " +
+                        "--output must be an absolute path (e.g. /var/minis-euleros/workspace/out.jpg). " +
                             "Got the relative path '$outputPath', which cannot be resolved because " +
                             "minis-model-use does not inherit the shell's working directory.",
                     )
@@ -408,7 +408,7 @@ class ModelUseOffloadHandler(
         if (outputPath != null) {
             // [T-android-model-use-session-scoped-write] Prefer the caller
             // session's own host dir; fall back to the global resolver only when
-            // sessionId is null or the path isn't a session-scoped /var/minis
+            // sessionId is null or the path isn't a session-scoped /var/minis-euleros
             // subdir. Guaranteed absolute here (relative --output rejected above).
             val hostFile = sessionScopedHostFile(outputPath, sessionId)
                 ?: PRootKernel.resolveHostPath(outputPath)
@@ -440,8 +440,8 @@ class ModelUseOffloadHandler(
         } else if (response.mediaAttachments.isNotEmpty()) {
             // [T-android-model-use-session-scoped-write] Auto-save to the caller
             // session's attachments dir, not the global (last-writer-wins) mount.
-            val attachDir = sessionScopedHostFile("/var/minis/attachments", sessionId)
-                ?: PRootKernel.resolveHostPath("/var/minis/attachments")
+            val attachDir = sessionScopedHostFile("/var/minis-euleros/attachments", sessionId)
+                ?: PRootKernel.resolveHostPath("/var/minis-euleros/attachments")
             if (attachDir != null) {
                 attachDir.mkdirs()
                 for ((idx, media) in response.mediaAttachments.withIndex()) {
@@ -449,7 +449,7 @@ class ModelUseOffloadHandler(
                     val fileName = "model-use-$modelSlug-$ts-$idx.$ext"
                     val hostFile = File(attachDir, fileName)
                     hostFile.writeBytes(media.data)
-                    val responsePath = "/var/minis/attachments/$fileName"
+                    val responsePath = "/var/minis-euleros/attachments/$fileName"
                     logModelUseWrite(responsePath, hostFile, sessionId)
                     mediaFiles.put(JSONObject().apply {
                         put("type", media.type.value)
@@ -1225,8 +1225,8 @@ class ModelUseOffloadHandler(
         } else if (response.mediaAttachments.isNotEmpty()) {
             // [T-android-model-use-session-scoped-write] Auto-save to the caller
             // session's attachments dir, not the global (last-writer-wins) mount.
-            val attachDir = sessionScopedHostFile("/var/minis/attachments", sessionId)
-                ?: PRootKernel.resolveHostPath("/var/minis/attachments")
+            val attachDir = sessionScopedHostFile("/var/minis-euleros/attachments", sessionId)
+                ?: PRootKernel.resolveHostPath("/var/minis-euleros/attachments")
             if (attachDir != null) {
                 attachDir.mkdirs()
                 for ((idx, media) in response.mediaAttachments.withIndex()) {
@@ -1234,7 +1234,7 @@ class ModelUseOffloadHandler(
                     val fileName = "model-use-$modelSlug-$ts-$idx.$ext"
                     val hostFile = File(attachDir, fileName)
                     hostFile.writeBytes(media.data)
-                    val responsePath = "/var/minis/attachments/$fileName"
+                    val responsePath = "/var/minis-euleros/attachments/$fileName"
                     logModelUseWrite(responsePath, hostFile, sessionId)
                     mediaFiles.put(JSONObject().apply {
                         put("type", media.type.value)
@@ -1257,14 +1257,14 @@ class ModelUseOffloadHandler(
     }
 
     /**
-     * [T-android-model-use-session-scoped-write] Resolve a `/var/minis/<sub>/...`
+     * [T-android-model-use-session-scoped-write] Resolve a `/var/minis-euleros/<sub>/...`
      * Linux path to the caller session's OWN host directory, bypassing the
      * global (last-writer-wins) PRootKernel.bindMounts map. That global map is
      * overwritten by ExecutionCoordinator.buildSessionBindMounts on every shell
-     * build, so PRootKernel.resolveHostPath("/var/minis/attachments") returns
+     * build, so PRootKernel.resolveHostPath("/var/minis-euleros/attachments") returns
      * whichever session built a shell most recently — a model-use call from
      * session A could then write into session B's attachments dir while the
-     * response reports the abstract `/var/minis/attachments/...` path, which A's
+     * response reports the abstract `/var/minis-euleros/attachments/...` path, which A's
      * shell (mounted to A's dir) can't read. Mirrors iOS da4b6c5d, which routes
      * the write to minisAttachmentsPersistentDir(for: callerSid).
      *
@@ -1272,11 +1272,11 @@ class ModelUseOffloadHandler(
      * buildSessionBindMounts). For those, host dir = filesDir/minis-sessions/
      * <sid>/<sub>/<rest>. Returns null when [sessionId] is null (caller then
      * falls back to the global resolveHostPath and logs the degrade) or the path
-     * isn't a session-scoped `/var/minis/<sub>` path.
+     * isn't a session-scoped `/var/minis-euleros/<sub>` path.
      */
     private fun sessionScopedHostFile(linuxPath: String, sessionId: String?): File? {
         if (sessionId == null) return null
-        val m = Regex("^/var/minis/(attachments|offloads|workspace|browser)(/.*)?$").find(linuxPath)
+        val m = Regex("^/var/minis-euleros/(attachments|offloads|workspace|browser)(/.*)?$").find(linuxPath)
             ?: return null
         val sub = m.groupValues[1]
         val rest = m.groupValues[2].removePrefix("/")
@@ -1291,7 +1291,7 @@ class ModelUseOffloadHandler(
         Log.i(
             "ModelUseImage",
             "[ModelUseWrite] path=$responsePath hostFile=${hostFile.absolutePath} " +
-                "sessionId=$sessionId globalAttachMount=${PRootKernel.bindMounts["/var/minis/attachments"]}",
+                "sessionId=$sessionId globalAttachMount=${PRootKernel.bindMounts["/var/minis-euleros/attachments"]}",
         )
     }
 
@@ -1576,9 +1576,9 @@ class ModelUseOffloadHandler(
      *
      *  - `data:<mime>;base64,<...>` → inline base64
      *  - `file:///<host-path>` → direct host read
-     *  - `/var/minis/<scope>/<path>` or `/<abs/linux/path>` → via
+     *  - `/var/minis-euleros/<scope>/<path>` or `/<abs/linux/path>` → via
      *    [PRootKernel.resolveHostPath] (which already handles
-     *    `/var/minis/` bind mounts longest-prefix)
+     *    `/var/minis-euleros/` bind mounts longest-prefix)
      *  - `http(s)://` → throw with a hint to download via shell_execute
      *    first (matches iOS — avoids egressing user content)
      *  - anything else (relative paths, unknown schemes) → throw
@@ -1611,19 +1611,19 @@ class ModelUseOffloadHandler(
             throw ImageInputError(
                 "http(s):// image URLs are not supported by minis-model-use. " +
                     "Download first with `shell_execute` (curl/wget) into " +
-                    "/var/minis/workspace/, then reference the local path."
+                    "/var/minis-euleros/workspace/, then reference the local path."
             )
         }
 
         // file:///abs/path → strip prefix, treat as host path; fall back
-        // to resolveHostPath so bind-mounted /var/minis/* still works
-        // when callers write file:///var/minis/... .
+        // to resolveHostPath so bind-mounted /var/minis-euleros/* still works
+        // when callers write file:///var/minis-euleros/... .
         val linuxPath = when {
             url.startsWith("file://") -> url.removePrefix("file://")
             url.startsWith("/") -> url
             else -> throw ImageInputError(
                 "Unsupported image_url '$url'. Use a data: URL, file:///host/path, " +
-                    "/var/minis/<scope>/<path>, or an absolute Linux path."
+                    "/var/minis-euleros/<scope>/<path>, or an absolute Linux path."
             )
         }
         val hostFile: File = PRootKernel.resolveHostPath(linuxPath)
@@ -1807,12 +1807,12 @@ Examples:
   minis-model-use list
   minis-model-use list --modality image_input
   minis-model-use search gemini
-  minis-model-use run --model claude-sonnet-4-6 --input /var/minis/workspace/prompt.json
+  minis-model-use run --model claude-sonnet-4-6 --input /var/minis-euleros/workspace/prompt.json
   minis-model-use run --model deepseek/deepseek-v4-flash --input msgs.json   # qualified form
   minis-model-use run --model deepseek-v4-flash --provider deepseek --input msgs.json   # equivalent
   echo 'What is 2+2?' | minis-model-use run --model gpt-4o
   minis-model-use run --model gemini-2.5-flash --system 'You are a poet' \
-                      --input msgs.json --output /var/minis/workspace/out.txt
+                      --input msgs.json --output /var/minis-euleros/workspace/out.txt
 """
     }
 }

@@ -770,7 +770,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             is DeepLinkAction.OpenAlarmList -> {
-                // T297: minis://views/alarm now opens the system Clock app
+                // T297: miniseuleros://views/alarm now opens the system Clock app
                 // directly via AlarmClock.ACTION_SHOW_ALARMS — the in-app
                 // AlarmListScreen was a one-button passthrough that did the
                 // exact same thing. The android-alarm tool envelope still

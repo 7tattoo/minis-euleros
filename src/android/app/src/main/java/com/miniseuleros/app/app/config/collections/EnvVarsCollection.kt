@@ -23,7 +23,7 @@ import java.util.TimeZone
  * The agent can list keys, attach a note, or remove a variable, but
  * the actual secret only ever moves through the encrypted prefs and
  * the user-facing UI. Adding a variable goes through the deep link
- * `minis://settings/environments?create_key=…` so the user supplies
+ * `miniseuleros://settings/environments?create_key=…` so the user supplies
  * the value directly.
  */
 class EnvVarsCollection(
@@ -62,7 +62,7 @@ class EnvVarsCollection(
 
     override fun add(payload: ConfigValue): String {
         throw ConfigError.PermissionDenied(
-            "Use the deep link `minis://settings/environments?create_key=…` so the user enters the value directly"
+            "Use the deep link `miniseuleros://settings/environments?create_key=…` so the user enters the value directly"
         )
     }
 

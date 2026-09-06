@@ -1,5 +1,6 @@
 package com.miniseuleros.app.sandbox
 
+import com.miniseuleros.app.BuildConfig
 import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.util.Log
@@ -52,7 +53,14 @@ fun interface NativeOffloadHandler {
 
 object NativeOffloadServer {
     private const val TAG = "NativeOffloadServer"
-    private const val SOCKET_NAME = "native-offload"
+
+    // T287-fix: abstract unix sockets live in a GLOBAL per-user namespace, not
+    // a per-app one. The stock OpenMinis uses the bare name "native-offload",
+    // so when a second Minis-family app (e.g. this euleros build + the original
+    // com.openminis.app) is installed side-by-side, whichever starts second
+    // fails to bind the same name and crashes in MinisApp.onCreate. Suffix the
+    // name with our applicationId to make it app-exclusive.
+    private const val SOCKET_NAME = "native-offload-" + BuildConfig.APPLICATION_ID
     private const val MAGIC_REQ = 0x46464F4E  // 'N' 'O' 'F' 'F' little-endian
     private const val MAGIC_RSP = 0x52464F4E  // 'N' 'O' 'F' 'R'
     private const val VERSION = 1

@@ -31,7 +31,7 @@ import java.util.UUID
  *     survives process death and reboots once persisted, so there's no
  *     "activation" step — access is always available while the permission
  *     grant is held.
- *   - The shell-level bind-mount at `/var/minis/mounts/<name>` is NOT
+ *   - The shell-level bind-mount at `/var/minis-euleros/mounts/<name>` is NOT
  *     implemented in this pass. DocumentFile doesn't expose POSIX paths,
  *     so exposing these trees inside the PRoot / iSH rootfs needs a
  *     FUSE bridge or a periodic mirror pass. Spec §2.9.4 calls out the

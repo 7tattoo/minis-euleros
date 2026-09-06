@@ -149,7 +149,7 @@ object Routes {
         }
         return if (params.isEmpty()) "terminal" else "terminal?${params.joinToString("&")}"
     }
-    /** Chat-files browser: opens FileBrowser rooted at /var/minis for the session. */
+    /** Chat-files browser: opens FileBrowser rooted at /var/minis-euleros for the session. */
     const val CHAT_FILES = "chat_files/{sessionId}"
     fun chatFiles(sessionId: String) = "chat_files/$sessionId"
     const val MEMORY = "memory"
@@ -447,7 +447,7 @@ fun AppNavigation(
     }
 
     // Pinned-shortcut cold start: when launched via
-     // `minis://session/<id>/<resource-path>`, set the pending HTML
+     // `miniseuleros://session/<id>/<resource-path>`, set the pending HTML
      // preview synchronously and start NavHost directly at the matching
      // chat so ChatScreen's LaunchedEffect consumes the pending state on
      // first composition — no sessions-list flash, no launch-session
@@ -772,7 +772,7 @@ fun AppNavigation(
                 onBack = { navController.safePopBackStack() },
                 onBrowseFiles = {
                     val rootfs = RootfsManager.getInstance(ctx.applicationContext)
-                    val hostPath = java.io.File(rootfs.rootfsDir, "var/minis/$folderId")
+                    val hostPath = java.io.File(rootfs.rootfsDir, "var/minis-euleros/$folderId")
                     val label = when (folderId) {
                         "shared" -> ctx.getString(com.miniseuleros.app.R.string.shared_folder_name_shared)
                         "skills" -> ctx.getString(com.miniseuleros.app.R.string.shared_folder_name_skills)
@@ -783,9 +783,9 @@ fun AppNavigation(
                         rootPath = hostPath,
                         rootLabel = label,
                         // Route reads through PRoot bind mounts so the host
-                        // dirs that back /var/minis/{shared,skills,memory}
+                        // dirs that back /var/minis-euleros/{shared,skills,memory}
                         // resolve, matching how chat-files browse works.
-                        linuxRootPath = "/var/minis/$folderId",
+                        linuxRootPath = "/var/minis-euleros/$folderId",
                         appContext = ctx.applicationContext,
                     )
                     navController.safeNavigate(Routes.FILE_BROWSER)
@@ -1027,17 +1027,17 @@ fun AppNavigation(
                     // [T-android-copy-abs-path-fullpath] This browser is rooted at
                     // the per-session host dir (filesDir/minis-sessions/<sid>),
                     // whose immediate children (workspace/ attachments/ offloads/
-                    // browser/) are exactly the PRoot /var/minis/* subdirs. The
+                    // browser/) are exactly the PRoot /var/minis-euleros/* subdirs. The
                     // host listing already resolves correctly so we keep rootPath
                     // host-based (no linuxRootPath re-routing — that would redirect
-                    // /var/minis to the global/empty placeholder dir). We only pass
-                    // displayLinuxPrefix = "/var/minis" so "Copy Absolute Path"
-                    // emits the agent-visible /var/minis/workspace/foo.py instead of
+                    // /var/minis-euleros to the global/empty placeholder dir). We only pass
+                    // displayLinuxPrefix = "/var/minis-euleros" so "Copy Absolute Path"
+                    // emits the agent-visible /var/minis-euleros/workspace/foo.py instead of
                     // the opaque /data/user/0/.../minis-sessions/<sid>/... host path.
                     FilePreviewHolder.fileBrowserViewModel = FileBrowserViewModel(
                         rootPath = java.io.File(rootPath),
                         rootLabel = "Session Files",
-                        displayLinuxPrefix = "/var/minis",
+                        displayLinuxPrefix = "/var/minis-euleros",
                     )
                     navController.safeNavigate(Routes.FILE_BROWSER)
                 },
@@ -1092,17 +1092,17 @@ fun AppNavigation(
         }
 
         // Browse Chat Files (iOS parity: open FileBrowser rooted at the full
-        // Linux root, focused on /var/minis. Matches AIChatView.swift L490:
-        //   FileBrowserView(rootPath: dataPath, initialPath: dataPath/var/minis,
+        // Linux root, focused on /var/minis-euleros. Matches AIChatView.swift L490:
+        //   FileBrowserView(rootPath: dataPath, initialPath: dataPath/var/minis-euleros,
         //                   rootLabel: "/")
-        // so the user can navigate up out of /var/minis into the broader rootfs.
+        // so the user can navigate up out of /var/minis-euleros into the broader rootfs.
         composable(
             route = Routes.CHAT_FILES,
             arguments = listOf(navArgument("sessionId") { type = NavType.StringType }),
         ) { backStackEntry ->
             val context = androidx.compose.ui.platform.LocalContext.current
             val rootfs = RootfsManager.getInstance(context.applicationContext)
-            val varMinis = java.io.File(rootfs.rootfsDir, "var/minis")
+            val varMinis = java.io.File(rootfs.rootfsDir, "var/minis-euleros")
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
             val vm = remember(rootfs.rootfsDir.absolutePath, varMinis.absolutePath, sessionId) {
                 FileBrowserViewModel(
@@ -1110,7 +1110,7 @@ fun AppNavigation(
                     initialPath = varMinis.takeIf { it.exists() },
                     rootLabel = "/",
                     // T121: route directory listings through PRootKernel bind
-                    // mounts so /var/minis/{skills,memory,shared} resolve to
+                    // mounts so /var/minis-euleros/{skills,memory,shared} resolve to
                     // their backing host dirs (filesDir/minis-global/<subdir>).
                     // Without this the browser walks the rootfs tarball
                     // directly and shows the empty placeholder dirs that ship

@@ -153,8 +153,8 @@ class SoulIconConfigEdgeTest {
         val outside = listOf(
             "/etc/passwd",
             "/data/data/com.miniseuleros.app/databases/chat.db",
-            "/var/minis/../../etc/passwd",
-            "/var/miniswhatever/x.png",   // prefix impostor
+            "/var/minis-euleros/../../etc/passwd",
+            "/var/minis-euleroswhatever/x.png",   // prefix impostor
         )
         for (p in outside) {
             val allowed = SoulIcon.ALLOWED_LINUX_ROOTS.any { p == it || p.startsWith("$it/") }

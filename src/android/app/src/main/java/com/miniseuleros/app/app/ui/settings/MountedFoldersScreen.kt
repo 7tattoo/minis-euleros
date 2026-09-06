@@ -383,12 +383,33 @@ fun MountedFoldersScreen(
  * meaning, and Download as more "transient scratch" than the long-lived folder
  * a mount implies.
  */
-private fun initialPickerUri(): Uri? = runCatching {
+private fun initialPickerUri(): Uri? =
     DocumentsContract.buildDocumentUri(
         "com.android.externalstorage.documents",
         "primary:Documents",
     )
-}.getOrNull()
+// T288-fix (attempt 3, definitive): resume seeding the picker at
+// "primary:Documents".
+//
+// Attempt 1 ("primary:Documents") and attempt 2 ("primary:") both looked
+// broken on this device — the picker showed "no files" + "can't use this
+// folder" with a disabled "Use this folder". Attempt 2 then moved to
+// launch(null), which opened Android 16's DocumentsUI at the shared-storage
+// ROOT; there the "Use this folder" button is permanently disabled even after
+// entering a real subdirectory (root-level picker mode never becomes
+// grantable). That is why euleros mounts never completed while the original
+// app (which still seeds "primary:Documents") kept working.
+//
+// Root cause of attempts 1+2's symptoms turned out to be SYSTEM-level, not
+// app-level: DocumentsUI's own data was corrupted (ExternalStorageProvider
+// threw NoSuchFileException/NPE, picker listed zero files everywhere).
+// `pm clear com.google.android.documentsui` restored the picker, after which
+// "primary:Documents" is fully grantable again — verified end-to-end.
+//
+// So: always seed a concrete document URI. null is NOT a safe default on
+// Android 16 (root-mode picker, button disabled). Documents is preferred per
+// the constraints documented above (not blocked, always present, one level
+// below root so the breadcrumb still allows navigating elsewhere).
 
 @Composable
 private fun InfoBanner() {
@@ -546,7 +567,7 @@ private fun MountRow(
                 AccessBadge(entry = entry)
             }
             Text(
-                text = "/var/minis/mounts/${entry.name}",
+                text = "/var/minis-euleros/mounts/${entry.name}",
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
