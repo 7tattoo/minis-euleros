@@ -128,6 +128,12 @@ src/android/app/src/main/jniLibs/arm64-v8a/*.so
 # or rebuilt from anything in this tree. See deps/build_proot.sh.
 !src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so
 !src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so
+# [7tattoo fork] This snapshot fork carries no deps/proot sources (empty
+# submodule), so the proot binary cannot be rebuilt here. Track the verbatim
+# binary from the official OpenMinis 1.13 release APK instead
+# (md5 047996be241bd5b0c451da579e06d49b).
+!src/android/app/src/main/jniLibs/arm64-v8a/libproot.so
+!src/android/app/src/main/assets/proot-aarch64
 deps/lame-build/
 deps/lame-3.100/**/.libs/
 
