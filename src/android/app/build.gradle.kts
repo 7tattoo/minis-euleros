@@ -37,7 +37,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.miniseuleros.app"
+        applicationId = "com.openminis.tattoo"
         minSdk = 26
         targetSdk = 35
         versionCode = 25
