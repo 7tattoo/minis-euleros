@@ -67,6 +67,7 @@ class RootfsManager private constructor(private val context: Context) {
      */
     suspend fun installIfNeeded() = withContext(Dispatchers.IO) {
         if (isInstalled) {
+            applyOverlayIfNeeded()   // 幂等叠加，不删除任何文件
             Log.d(TAG, "Rootfs already installed at $rootfsDir")
             _installState.value = RootfsInstallState.Installed
             return@withContext
@@ -117,6 +118,8 @@ class RootfsManager private constructor(private val context: Context) {
                 }
             }
 
+            applyOverlayIfNeeded()
+
             _installState.value = RootfsInstallState.Finalizing
 
             // Write arch marker
@@ -153,6 +156,48 @@ class RootfsManager private constructor(private val context: Context) {
             Log.e(TAG, "Rootfs installation failed", t)
             _installState.value = RootfsInstallState.Failed(t.message ?: t.javaClass.simpleName)
             throw t
+        }
+    }
+
+    /**
+     * 在已安装的 rootfs 之上叠加修复 overlay。
+     * 非破坏性（extractTar 只写入/覆盖，绝不删除）且幂等：用 stamp 文件记录版本。
+     *
+     * 需要它的原因见 docs/rootfs-overlay.md：base 资产不完整（SONAME 软链接在，
+     * 目标真实库不在），curl/git/xz/wget/python-lzma/pip 开箱即坏。若只在首次
+     * 安装时叠加，已装过 rootfs 的老用户永远拿不到修复。
+     */
+    private fun applyOverlayIfNeeded() {
+        if (!rootfsDir.exists()) return
+        val stamp = File(rootfsDir, ".rootfs-overlay")
+        if (stamp.exists() && stamp.readText().trim() == ROOTFS_OVERLAY_VERSION) {
+            return
+        }
+        val assetName = try {
+            context.assets.open(ROOTFS_OVERLAY_ASSET).close()
+            ROOTFS_OVERLAY_ASSET
+        } catch (_: java.io.FileNotFoundException) {
+            try {
+                context.assets.open(ROOTFS_OVERLAY_ASSET_TAR).close()
+                ROOTFS_OVERLAY_ASSET_TAR
+            } catch (_: java.io.FileNotFoundException) {
+                Log.w(TAG, "Rootfs overlay asset not found; curl/xz/pip will be broken")
+                return
+            }
+        }
+        Log.i(TAG, "Applying rootfs repair overlay ($assetName)")
+        // 修复 overlay 失败不应破坏整个 rootfs 安装，因此这里吞掉异常只记日志。
+        try {
+            context.assets.open(assetName).use { overlayAsset ->
+                if (assetName.endsWith(".gz")) {
+                    GZIPInputStream(overlayAsset).use { extractTar(it, rootfsDir) }
+                } else {
+                    extractTar(overlayAsset, rootfsDir)
+                }
+            }
+            stamp.writeText(ROOTFS_OVERLAY_VERSION)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to apply rootfs overlay", t)
         }
     }
 
@@ -667,6 +712,9 @@ class RootfsManager private constructor(private val context: Context) {
         private const val ARCH = "aarch64"
         private const val ROOTFS_ASSET = "euleros-minirootfs.tar.gz"
         private const val ROOTFS_ASSET_TAR = "euleros-minirootfs.tar"
+        private const val ROOTFS_OVERLAY_ASSET = "euleros-rootfs-overlay.tar.gz"
+        private const val ROOTFS_OVERLAY_ASSET_TAR = "euleros-rootfs-overlay.tar"
+        private const val ROOTFS_OVERLAY_VERSION = "1"
         private const val PROOT_ASSET = "proot-aarch64"
         private const val DEFAULT_MOUNT_ASSET = "default_mount"
 
