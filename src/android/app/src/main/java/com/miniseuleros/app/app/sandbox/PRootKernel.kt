@@ -311,7 +311,11 @@ object PRootKernel {
             Log.w(TAG, "materializeMountTargets: rootfs not yet available: ${t.message}")
             return
         }
-        val mountsRoot = File(rootfs, "var/minis/mounts").also { it.mkdirs() }
+        // NOTE: 必须用 var/minis-euleros/mounts（与 MOUNTS_LINUX_PREFIX 一致）。
+        // 历史代码写成 var/minis/mounts（影子路径），占位目录建到了别处，
+        // 导致 PRoot 绑定后 readdir(/var/minis-euleros/mounts/) 仍看不到挂载名，
+        // "浏览对话文件 → mounts" 里点不到 MT2。
+        val mountsRoot = File(rootfs, "var/minis-euleros/mounts").also { it.mkdirs() }
 
         // Create placeholder dirs for desired names.
         for (linuxPath in desiredLinuxPaths) {

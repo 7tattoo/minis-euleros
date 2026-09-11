@@ -36,9 +36,41 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
 
+      # 用 7tattoo keystore 对 release 包做对齐 + v1/v2/v3 重签。
+      # 需要在仓库 Settings → Secrets 配置：
+      #   KEYSTORE_B64  = 7tattoo.jks 的 base64
+      #   KS_PASS       = keystore 密码
+      #   KEY_ALIAS     = 7tattoo
+      #   KEY_PASS      = 别名密码
+      # 未配置时降级为上传 debug 签名包，保证 CI 不中断。
+      - name: Sign release APK (7tattoo keystore)
+        working-directory: src/android
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.KS_PASS }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.KEY_PASS }}
+        run: |
+          set -e
+          OUT="app/build/outputs/apk/release"
+          UNSIGNED=$(ls "$OUT"/*.apk | head -1)
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning::未配置签名 secrets，上传 debug 签名包"
+            cp "$UNSIGNED" "$OUT/minis-tattoo-release-signed.apk"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > /tmp/7tattoo.jks
+          curl -sL -o /tmp/uber.jar https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
+          java -jar /tmp/uber.jar --apks "$UNSIGNED" \
+            --ks /tmp/7tattoo.jks --ksPass "$KS_PASS" \
+            --ksAlias "$KEY_ALIAS" --ksKeyPass "$KEY_PASS" \
+            --allowResign --out "$OUT/signed"
+          mv "$OUT"/signed/*-signed.apk "$OUT/minis-tattoo-release-signed.apk"
+          rm -rf "$OUT/signed" /tmp/uber.jar /tmp/7tattoo.jks
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: minis-tattoo-release
-          path: src/android/app/build/outputs/apk/release/*.apk
+          name: minis-tattoo-release-signed
+          path: src/android/app/build/outputs/apk/release/minis-tattoo-release-signed.apk
           if-no-files-found: error
