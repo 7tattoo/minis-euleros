@@ -522,6 +522,14 @@ class OpenAIProvider private constructor(
     }
 
     /**
+     * [T-deepseek-v4-relay-off] Endpoint is DeepSeek's own API (base URL carries
+     * "deepseek"), not a relay re-exposing V4 behind its own schema. Scopes the
+     * explicit `thinking:{type:"disabled"}` OFF toggle to the vendor endpoint;
+     * relays reject the root `thinking` key outright, so OFF omits it there.
+     */
+    private val isDeepSeekNative: Boolean = basePath.lowercase().contains("deepseek")
+
+    /**
      * [T-unified-reasoning-effort] Whether this endpoint applies OpenAI's
      * `reasoning_effort` (Chat) / `reasoning.effort` (Responses) uniformly to
      * EVERY model it hosts — including third-party families (GLM / Kimi /
@@ -2561,6 +2569,7 @@ class OpenAIProvider private constructor(
             isMistral = isMistral,
             isDashScope = isDashScope,
             isXAI = isXAI,
+            isDeepSeekNative = isDeepSeekNative,
             offEffort = explicitOffEffort(),
         )
         val trace = ThinkingRuleResolver.apply(body, ctx)

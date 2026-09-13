@@ -469,15 +469,38 @@ class ThinkingRulesRegressionTest {
      * evidence §A · 9d4d4f2e / 847822eb.
      */
     @Test
-    fun `deepseek v4 explicitly disables when off`() {
+    fun `deepseek v4 explicitly disables when off on the vendor endpoint`() {
         val body = capture(
             model = model("deepseek-v4-pro", reasoningEffortValues = listOf("high", "max")),
             level = ThinkingLevel.OFF,
+            // [T-deepseek-v4-relay-off] 显式 disabled 开关只保留在 DeepSeek 原生端点。
+            basePath = server.url("/api.deepseek.com/v1").toString().trimEnd('/'),
         )
         assertEquals(
             "V4 reasons by default, so OFF must be explicit: $body",
             "disabled",
             body.optJSONObject("thinking")?.optString("type"),
+        )
+    }
+
+    /**
+     * Rule: relays that re-expose deepseek-v4 behind their own OpenAI schema reject
+     * the root `thinking` key outright even when it carries `{"type":"disabled"}` —
+     * GcmodVip relay 400: '"thinking" is not supported on /v1/chat/completions and
+     * was not applied. Use "reasoning_effort"'. On a non-native endpoint OFF
+     * therefore omits the key entirely. evidence: user report 2026-09-13.
+     */
+    @Test
+    fun `deepseek v4 omits thinking key when off on a relay endpoint`() {
+        val body = capture(
+            model = model("deepseek-v4-flash", reasoningEffortValues = listOf("low", "high", "max")),
+            level = ThinkingLevel.OFF,
+            basePath = server.url("/v1").toString().trimEnd('/'),
+        )
+        assertEquals(
+            "relay rejects the thinking key, so OFF must omit it: $body",
+            false,
+            body.has("thinking"),
         )
     }
 

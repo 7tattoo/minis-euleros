@@ -49,6 +49,15 @@ data class ThinkingResolveContext(
      */
     val isXAI: Boolean = false,
     /**
+     * [T-deepseek-v4-relay-off] Endpoint is DeepSeek's own API (base URL carries
+     * "deepseek"), not a relay that merely serves deepseek-named models. Only the
+     * vendor endpoint keeps the explicit `thinking:{type:"disabled"}` OFF toggle
+     * (V4 thinks by default); relays that re-expose V4 behind their own OpenAI
+     * schema reject the root `thinking` key outright, so OFF omits it there.
+     * Defaults false so existing construction sites are unchanged.
+     */
+    val isDeepSeekNative: Boolean = false,
+    /**
      * The vendor's documented off tier, or null to omit the field when thinking is off.
      * Already an ALLOWLIST decision made by the caller (iOS ff60c818).
      */
@@ -438,6 +447,15 @@ object ThinkingRuleResolver {
                     body.put("reasoning_effort", clamped)
                     requested to clamped
                 } else {
+                    // [T-deepseek-v4-relay-off] V4 native requires the explicit
+                    // disabled toggle (V4 thinks by default), but relays that
+                    // re-expose V4 behind their own OpenAI schema reject the root
+                    // `thinking` key outright — GcmodVip relay 400: '"thinking" is
+                    // not supported on /v1/chat/completions ... Use
+                    // "reasoning_effort"'. On a non-native endpoint OFF therefore
+                    // omits the key entirely (the relay's own default applies);
+                    // only the vendor endpoint keeps the explicit toggle.
+                    if (!ctx.isDeepSeekNative) return null to null
                     body.put("thinking", JSONObject().put("type", "disabled"))
                     null to null
                 }

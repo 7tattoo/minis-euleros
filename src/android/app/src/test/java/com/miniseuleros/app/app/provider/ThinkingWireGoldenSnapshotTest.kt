@@ -265,7 +265,7 @@ qwen-tiny-max/HIGH -> {enable_thinking:true,extra_body:{enable_thinking:true}}
 qwen-tiny-max/XHIGH -> {enable_thinking:true,extra_body:{enable_thinking:true}}
 qwen-tiny-max/MAX -> {enable_thinking:true,extra_body:{enable_thinking:true}}
 qwen-tiny-max/ULTRA -> {enable_thinking:true,extra_body:{enable_thinking:true}}
-deepseek-v4/OFF -> {thinking:{type:"disabled"}}
+deepseek-v4/OFF -> {}
 deepseek-v4/LOW -> {reasoning_effort:"high",thinking:{type:"enabled"}}
 deepseek-v4/MEDIUM -> {reasoning_effort:"high",thinking:{type:"enabled"}}
 deepseek-v4/HIGH -> {reasoning_effort:"high",thinking:{type:"enabled"}}
