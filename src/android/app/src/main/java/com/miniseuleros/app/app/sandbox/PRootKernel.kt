@@ -193,9 +193,31 @@ object PRootKernel {
         // [T-mcp-integration-android] mcp-servers is global (like memory/skills):
         // binding it here makes the in-PRoot minis-mcp-cli read/write the SAME
         // servers.json the Android Settings UI does (host: minis-global/mcp-servers).
-        listOf("memory", "skills", "shared", "mcp-servers").forEach { subdir ->
+        // [T-workspace-global] workspace 也全局：跨会话共享（用户报告按会话隔离导致
+        // 不同对话互相看不到对方写的文件）。一次性把旧的按会话 workspace 迁移进来。
+        listOf("memory", "skills", "shared", "mcp-servers", "workspace").forEach { subdir ->
             val hostDir = File(globalBase, subdir).also { it.mkdirs() }
             bindMounts["/var/minis-euleros/$subdir"] = hostDir.absolutePath
+        }
+        migrateLegacySessionWorkspaces(context, File(globalBase, "workspace"))
+    }
+
+    /**
+     * [T-workspace-global] 一次性迁移：把 `minis-sessions/<sid>/workspace/` 的旧文件
+     * 拷进全局 workspace（仅在全局目录为空时执行，幂等、不覆盖已有文件）。
+     * 旧目录保留在磁盘上不删除，防误删用户数据。
+     */
+    private fun migrateLegacySessionWorkspaces(context: Context, globalWorkspace: File) {
+        if (globalWorkspace.list().isNullOrEmpty()) {
+            File(context.filesDir, "minis-sessions").listFiles()?.forEach { sess ->
+                val ws = File(sess, "workspace")
+                if (ws.isDirectory) ws.listFiles()?.forEach { f ->
+                    val dst = File(globalWorkspace, f.name)
+                    if (!dst.exists()) {
+                        runCatching { f.copyRecursively(dst, overwrite = false) }
+                    }
+                }
+            }
         }
     }
 
@@ -663,8 +685,10 @@ object PRootKernel {
         return cmd
     }
 
-    /** Subdirs that live under `minis-sessions/<sessionId>/` rather than the global pool. */
-    private val perSessionSubdirs = setOf("attachments", "offloads", "workspace", "browser")
+    /** Subdirs that live under `minis-sessions/<sessionId>/` rather than the global pool.
+     *  [T-workspace-global] `workspace` 有意不在此列：它与 memory/skills/shared 一样
+     *  全局共享（见 registerGlobalBindMounts），跨会话可见。 */
+    private val perSessionSubdirs = setOf("attachments", "offloads", "browser")
 
     /**
      * Resolve a `/var/minis-euleros/...` Linux path directly against a specific session's

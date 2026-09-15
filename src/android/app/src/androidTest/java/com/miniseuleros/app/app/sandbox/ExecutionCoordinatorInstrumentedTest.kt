@@ -88,19 +88,20 @@ class ExecutionCoordinatorInstrumentedTest {
         ExecutionCoordinator.execute("session-mounts", "echo test")
 
         // Should have session-level + global bind mounts
-        // Session: attachments, offloads, workspace, browser (4)
-        // Global: memory, skills (2)
-        assertEquals(6, PRootKernel.bindMounts.size)
+        // Session: attachments, offloads, browser (3)
+        // [T-workspace-global] workspace 归入全局。
+        // Global: memory, skills, shared, mcp-servers, workspace (5)
+        assertEquals(8, PRootKernel.bindMounts.size)
 
         // Verify session-level mounts
         assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/attachments"))
         assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/offloads"))
-        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/workspace"))
         assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/browser"))
 
         // Verify global mounts
         assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/memory"))
         assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/skills"))
+        assertTrue(PRootKernel.bindMounts.containsKey("/var/minis-euleros/workspace"))
     }
 
     @Test
@@ -111,14 +112,15 @@ class ExecutionCoordinatorInstrumentedTest {
         ExecutionCoordinator.execute(sessionId, "echo test")
 
         // Verify session host directories exist
+        // [T-workspace-global] workspace 不再按会话，归入全局。
         val sessionBase = File(context.filesDir, "minis-sessions/$sessionId")
-        for (subdir in listOf("attachments", "offloads", "workspace", "browser")) {
+        for (subdir in listOf("attachments", "offloads", "browser")) {
             assertTrue("$subdir should exist", File(sessionBase, subdir).isDirectory)
         }
 
         // Verify global host directories exist
         val globalBase = File(context.filesDir, "minis-global")
-        for (subdir in listOf("memory", "skills")) {
+        for (subdir in listOf("memory", "skills", "workspace")) {
             assertTrue("$subdir should exist", File(globalBase, subdir).isDirectory)
         }
     }
@@ -131,9 +133,14 @@ class ExecutionCoordinatorInstrumentedTest {
         ExecutionCoordinator.execute(sessionId, "echo test")
 
         val sessionBase = File(context.filesDir, "minis-sessions/$sessionId")
+        // [T-workspace-global] workspace 绑定到全局目录，不再指向会话目录。
         assertEquals(
-            File(sessionBase, "workspace").absolutePath,
+            File(File(context.filesDir, "minis-global"), "workspace").absolutePath,
             PRootKernel.bindMounts["/var/minis-euleros/workspace"]
+        )
+        assertEquals(
+            File(sessionBase, "attachments").absolutePath,
+            PRootKernel.bindMounts["/var/minis-euleros/attachments"]
         )
 
         val globalBase = File(context.filesDir, "minis-global")
@@ -269,10 +276,11 @@ class ExecutionCoordinatorInstrumentedTest {
         ExecutionCoordinator.stopCurrentCommand() // Should not throw
     }
 
-    // ==================== Cross-session file isolation ====================
+    // ==================== Cross-session workspace sharing ====================
 
+    // [T-workspace-global] workspace 全局共享——跨会话文件互相可见（用户需求）。
     @Test
-    fun differentSessionsHaveIsolatedWorkspaces() = runBlocking {
+    fun workspacesAreSharedAcrossSessions() = runBlocking {
         skipIfNoBoot()
 
         // Write file in session A's workspace
@@ -288,19 +296,12 @@ class ExecutionCoordinatorInstrumentedTest {
         )
         assertTrue(resultA.output.contains("from A"))
 
-        // Switch to session B — workspace should be empty
+        // Switch to session B — the same file must be visible
         val resultB = ExecutionCoordinator.execute(
             "session-iso-B",
-            "ls /var/minis-euleros/workspace/"
-        )
-        assertFalse("Session B should not see session A's file", resultB.output.contains("test.txt"))
-
-        // Switch back to A — file should still be there
-        val resultA2 = ExecutionCoordinator.execute(
-            "session-iso-A",
             "cat /var/minis-euleros/workspace/test.txt"
         )
-        assertTrue(resultA2.output.contains("from A"))
+        assertTrue("Session B should see session A's file", resultB.output.contains("from A"))
     }
 
     @Test

@@ -177,8 +177,10 @@ object ExecutionCoordinator {
         val prevAttachments = PRootKernel.bindMounts["/var/minis-euleros/attachments"]
 
         // Session-specific directories
+        // [T-workspace-global] workspace 已改为全局（见 registerGlobalBindMounts），
+        // 不再按会话隔离；跨会话文件互相可见。
         val sessionBase = File(filesDir, "minis-sessions/$sessionId")
-        listOf("attachments", "offloads", "workspace", "browser").forEach { subdir ->
+        listOf("attachments", "offloads", "browser").forEach { subdir ->
             val hostDir = File(sessionBase, subdir).also { it.mkdirs() }
             val linuxPath = "/var/minis-euleros/$subdir"
             mounts[linuxPath] = hostDir.absolutePath
@@ -199,7 +201,7 @@ object ExecutionCoordinator {
         // which is why they disagreed). Same trap as the external-mounts note
         // below.
         val globalBase = File(filesDir, "minis-global")
-        listOf("memory", "skills", "shared", "mcp-servers").forEach { subdir ->
+        listOf("memory", "skills", "shared", "mcp-servers", "workspace").forEach { subdir ->
             val hostDir = File(globalBase, subdir).also { it.mkdirs() }
             val linuxPath = "/var/minis-euleros/$subdir"
             mounts[linuxPath] = hostDir.absolutePath

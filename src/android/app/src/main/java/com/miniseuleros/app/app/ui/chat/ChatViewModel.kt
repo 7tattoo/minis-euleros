@@ -1569,7 +1569,9 @@ class ChatViewModel(
         // launch by MinisApp); reading via a closure means the index sees
         // an up-to-date snapshot on every rescan without a manual refresh.
         FileMentionIndex(
-            filesDir = java.io.File(context.applicationContext.filesDir, "minis-global"),
+            // [T-workspace-global] 传真实 filesDir：索引内部自己解析
+            // minis-global（workspace/shared/skills/memory）与 minis-sessions（attachments）。
+            filesDir = context.applicationContext.filesDir,
             mountsProvider = {
                 com.miniseuleros.app.sandbox.PRootKernel
                     .mountEntriesForIndex(context.applicationContext)

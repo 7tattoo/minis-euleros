@@ -366,11 +366,12 @@ class BrowserTabPool(private val context: Context) {
     }
 
 
-    /** The session's /var/minis-euleros/workspace/ host directory — downloads land here
-     *  so the agent can read and operate on them in follow-up turns. */
+    /** The /var/minis-euleros/workspace/ host directory — downloads land here
+     *  so the agent can read and operate on them in follow-up turns.
+     *  [T-workspace-global] workspace 全局共享（与 memory/skills/shared 一致），
+     *  跨会话可见；不再使用按会话目录。 */
     private fun sessionWorkspaceDir(): File? {
-        val sid = sessionId ?: return null
-        return File(File(File(context.filesDir, "minis-sessions"), sid), "workspace")
+        return File(File(context.filesDir, "minis-global"), "workspace")
             .apply { mkdirs() }
     }
 

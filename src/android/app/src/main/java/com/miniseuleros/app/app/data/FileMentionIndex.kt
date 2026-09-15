@@ -43,7 +43,14 @@ class FileMentionIndex(
     private val cacheTtlMs: Long = DEFAULT_CACHE_TTL_MS,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
-    constructor(context: Context) : this(File(context.filesDir, "minis-global"))
+    // [T-workspace-global] filesDir 是真实 app filesDir。workspace 全局
+    // （minis-global/workspace，跨会话共享）；attachments 按会话
+    // （minis-sessions/<sid>/attachments）。修正了旧实现扫 minis-global/
+    // {workspace,attachments}/<sid> 的错误路径——那个布局从未存在过。
+    private val globalBase = File(filesDir, "minis-global")
+    private val sessionsBase = File(filesDir, "minis-sessions")
+
+    constructor(context: Context) : this(context.filesDir)
 
     /**
      * Scope priorities — `order` doubles as the empty-query default sort key
@@ -117,25 +124,29 @@ class FileMentionIndex(
         val collected = mutableListOf<Entry>()
         try {
             // Layer 1: session-local roots.
+            // [T-workspace-global] attachments 按会话（minis-sessions/<sid>/attachments），
+            // linux 路径不带 /<sid> 后缀——宿主映射里 sid 已经在 host dir 路径里。
             layerEntries(
                 sessionId = sessionId,
                 layers = listOf(
-                    File(filesDir, "workspace/$sessionId") to Scope.WORKSPACE,
-                    File(filesDir, "attachments/$sessionId") to Scope.ATTACHMENTS,
+                    File(sessionsBase, "$sessionId/attachments") to Scope.ATTACHMENTS,
                 ),
-                linuxRootFor = { scope -> "/var/minis-euleros/${scope.displayLabel}/$sessionId" },
+                linuxRootFor = { scope -> "/var/minis-euleros/${scope.displayLabel}" },
             ).let { newBatch ->
                 collected += newBatch
                 publish(token, collected)
             }
 
             // Layer 2: shared roots.
+            // [T-workspace-global] workspace 加入共享根（minis-global/workspace），
+            // 跨会话可见——不再有 workspace/<sid> 会话层。
             layerEntries(
                 sessionId = sessionId,
                 layers = listOf(
-                    File(filesDir, "shared") to Scope.SHARED,
-                    File(filesDir, "skills") to Scope.SKILLS,
-                    File(filesDir, "memory") to Scope.MEMORY,
+                    File(globalBase, "shared") to Scope.SHARED,
+                    File(globalBase, "skills") to Scope.SKILLS,
+                    File(globalBase, "memory") to Scope.MEMORY,
+                    File(globalBase, "workspace") to Scope.WORKSPACE,
                 ),
                 linuxRootFor = { scope -> "/var/minis-euleros/${scope.displayLabel}" },
             ).let { newBatch ->
