@@ -3325,12 +3325,28 @@ class ChatViewModel(
      * a signal to invoke `/compact` explicitly without blocking their turn.
      */
     private fun checkContextBeforeSend(): PreSendContextAction {
-        val tokens = _lastTurnContextTokens.value
+        // [T-android-compact-usage-fallback] OpenAI-compatible relays may strip
+        // the SSE usage block (drop `stream_options.include_usage`), leaving
+        // _lastTurnContextTokens at 0 forever — both context gates then
+        // unconditionally proceed: no compact, no prompt, no trace, until the
+        // provider 400s on an over-limit request. Fall back to a local
+        // estimate over the effective (compact-folded) history so the gates
+        // stay live when the provider reports nothing.
+        val apiTokens = _lastTurnContextTokens.value
+        val (tokens, source) =
+            if (apiTokens > 0) Pair(apiTokens, "api")
+            else Pair(estimateContextTokensLLM(effectiveAgentHistory()), "est")
         if (tokens <= 0) return PreSendContextAction.PROCEED
         // [T-context-window-live-read] Live window (entry re-resolved + group
         // contextLimitTokens folded in) — not the currentModel snapshot.
         val window = effectiveContextWindowTokens() ?: return PreSendContextAction.PROCEED
         val policy = ContextPolicy.forContextWindow(window)
+        if (source == "est") {
+            AppLogger.info(
+                TAG,
+                "[Context] pre-send estimate-only ($tokens / $window tokens, api usage missing) — gates stay live via local estimate",
+            )
+        }
         return when (policy.check(tokens, window)) {
             ContextPolicy.CheckResult.OK -> PreSendContextAction.PROCEED
 
@@ -3458,7 +3474,13 @@ class ChatViewModel(
      * must read the freshly-compacted history.
      */
     private suspend fun inLoopContextCheck(compactionsSoFar: Int): InLoopContextAction {
-        val tokens = _lastTurnContextTokens.value
+        // [T-android-compact-usage-fallback] Same fallback as the pre-send
+        // gate: a relay that never reports usage would keep this guard
+        // permanently silent while the turn keeps fanning out tool calls.
+        val apiTokens = _lastTurnContextTokens.value
+        val (tokens, source) =
+            if (apiTokens > 0) Pair(apiTokens, "api")
+            else Pair(estimateContextTokensLLM(effectiveAgentHistory()), "est")
         if (tokens <= 0) return InLoopContextAction.PROCEED
         val window = effectiveContextWindowTokens() ?: return InLoopContextAction.PROCEED
         val policy = ContextPolicy.forContextWindow(window)
@@ -3482,7 +3504,7 @@ class ChatViewModel(
                 // autoCompactEnabled either.
                 AppLogger.info(
                     TAG,
-                    "[AutoCompact] mid-loop compact #${compactionsSoFar + 1}: $tokens / $window tokens " +
+                    "[AutoCompact] mid-loop compact #${compactionsSoFar + 1}: $tokens / $window tokens (src=$source) " +
                         "(autoCompactPref=${com.miniseuleros.app.data.AutoCompactPrefs.isEnabled()}, not a gate here)",
                 )
                 appendSystemInfo(
@@ -3498,9 +3520,11 @@ class ChatViewModel(
                 // place made the very next iteration read the same number and
                 // compact again immediately, burning the whole budget in
                 // seconds (observed on device: two compactions 3s apart, both
-                // logging an identical 66358). Zeroing it makes the guard
-                // PROCEED once, so the next real response measures the
-                // post-compaction size and the decision is made on fresh data.
+                // logging an identical 66358). Zeroing it makes the gate fall
+                // back to the local estimate over the freshly-compacted
+                // effective history, which now reads far below the threshold;
+                // if the provider does report usage, the next real response
+                // overwrites this with exact data.
                 _lastTurnContextTokens.value = 0
                 InLoopContextAction.COMPACTED
             }
@@ -7124,6 +7148,65 @@ class ChatViewModel(
             }
         }
         return (totalChars / 3.5).toInt() + imageTokens
+    }
+
+    /**
+     * Local context-size estimate for the compact gates when the provider
+     * reports no usage. [estimateContextTokens] answers "how big is the full
+     * on-disk history" (offload ranking), which is the WRONG question for the
+     * compact gates after a compaction: agentHistory keeps every folded
+     * message as an audit trail, so the estimate would never drop, the in-loop
+     * guard would compact again immediately and burn [maxInLoopCompactions].
+     *
+     * This walks [effectiveAgentHistory] — the exact message list the next API
+     * call will send (summary inlined, kept tail, old tool results pruned) —
+     * so after a compaction the number genuinely falls below the threshold and
+     * the gates settle instead of thrashing.
+     *
+     * CJK-aware: Chinese/Japanese/Korean text averages ~1.5 chars per token
+     * (some chars are single tokens, many are two), so `chars/3.5` — tuned for
+     * English prose — underestimates a Chinese session's real pressure by
+     * 2-3×. For mixed content the chars are bucketed: CJK at /1.5, everything
+     * else at /3.5.
+     */
+    private fun estimateContextTokensLLM(messages: List<LLMMessage>): Int {
+        var cjkChars = 0
+        var otherChars = 0
+        var imageTokens = 0
+        for (msg in messages) {
+            if (msg.content.isNotEmpty()) otherChars += msg.content.length
+            for (part in msg.contentParts) {
+                when (part) {
+                    is AgentContentPart.Text -> {
+                        for (ch in part.text) {
+                            if (isCjkChar(ch)) cjkChars++ else otherChars++
+                        }
+                    }
+                    is AgentContentPart.ToolUse -> otherChars += part.input.toString().length
+                    is AgentContentPart.ToolResult -> {
+                        val s = part.content
+                        if (s.any { it.code > 0x7F }) {
+                            for (ch in s) {
+                                if (isCjkChar(ch)) cjkChars++ else otherChars++
+                            }
+                        } else {
+                            otherChars += s.length
+                        }
+                        part.imageData?.let { imageTokens += BPETokenizer.countImageTokens(it) }
+                    }
+                    is AgentContentPart.ImageData ->
+                        imageTokens += BPETokenizer.countImageTokens(part.data)
+                }
+            }
+        }
+        return (cjkChars / 1.5 + otherChars / 3.5).toInt() + imageTokens
+    }
+
+    /** CJK unified ideographs + kana + fullwidth/CJK punctuation ranges. */
+    private fun isCjkChar(ch: Char): Boolean {
+        val c = ch.code
+        return c in 0x2E80..0x9FFF || c in 0x3400..0x4DBF ||
+            c in 0xF900..0xFAFF || c in 0x3000..0x303F || c in 0xFF00..0xFFEF
     }
 
     /**
