@@ -3,6 +3,8 @@ package com.miniseuleros.app.tools
 import com.miniseuleros.app.browser.BrowserAction
 import com.miniseuleros.app.data.model.AgentToolDefinition
 import com.miniseuleros.app.data.model.AgentToolParam
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Central registry of all agent tool definitions.
@@ -27,8 +29,20 @@ object AgentTools {
         // attempt those calls. Mirrors the iOS gate at
         // AIChatViewModel.makeAgentTools(memoryEnabled:).
         memoryEnabled: Boolean = true,
+        // [T-ubuntu-secondary-sandbox] Expose ubuntu_shell only when the
+        // secondary Ubuntu 24.04 rootfs is installed (Settings → Ubuntu 沙箱).
+        // Keeps the schema clean for users who never use the feature.
+        ubuntuShellEnabled: Boolean = false,
+        // [T-android-subagent-orchestration] Expose dispatch_subtasks only
+        // when a sub-agent model group can be resolved (Settings → 模型组 →
+        // 子代理, or any group the planner may name per-task). No groups →
+        // the tool would only ever error, so it stays out of the schema.
+        subAgentsEnabled: Boolean = false,
     ): List<AgentToolDefinition> = buildList {
         add(shellExecuteDefinition())
+        if (ubuntuShellEnabled) {
+            add(ubuntuShellDefinition())
+        }
         add(FileReadTool.definition())
         add(FileWriteTool.definition())
         add(FileEditTool.definition())
@@ -36,11 +50,71 @@ object AgentTools {
             add(ReadImageTool.definition())
         }
         add(browserUseDefinition())
+        if (subAgentsEnabled) {
+            add(dispatchSubtasksDefinition())
+        }
         if (memoryEnabled) {
             add(memoryWriteDefinition())
             add(memoryGetDefinition())
         }
     }
+
+    // [T-android-subagent-orchestration] Multi-model orchestration entry.
+    // The main model plans, decomposes, and dispatches self-contained
+    // subtask briefs with EXPLICIT permission scopes; the harness rejects
+    // every out-of-scope request. Sub-agents return structured facts packs;
+    // only the pack re-enters this context (SoL-Pi result cards / MAGE
+    // budget packing), never the sub-agent transcript.
+    private fun dispatchSubtasksDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "dispatch_subtasks",
+        description = "Multi-model orchestration: dispatch a plan of subtasks to sub-agent models " +
+            "(chosen from the user's configured model groups, Settings → 模型组). " +
+            "Each subtask MUST be a SELF-CONTAINED brief — sub-agents cannot see this conversation. " +
+            "Declare an explicit permission scope per subtask (read_paths / write_paths globs over " +
+            "linux paths + allowed tools); requests beyond the scope are REJECTED by the harness. " +
+            "Write-scoped subtasks whose declared write paths collide are scheduled in waves " +
+            "(file-write lease); independent ones run concurrently. Results come back as a " +
+            "structured facts pack (STATUS/SUMMARY/FACTS/FILES/ISSUES per subtask) — only the " +
+            "pack enters your context, never the sub-agent transcripts. The bound sub-agent " +
+            "group is a POOL: subtasks are spread across the group's available member models " +
+            "by ordinal (extra members are fallback), so put several models in one group for " +
+            "variety; pass group_id per subtask to route it to a specific group. PERSISTENCE " +
+            "RULE [T-android-subagent-handoff]: require every subtask to persist its work " +
+            "products as files inside its declared write scope — a result that exists only in " +
+            "conversation is lost to later turns and compaction, wasting all compute spent. " +
+            "The system also appends a fixed-format handoff ledger at " +
+            "/var/minis-euleros/workspace/.collab/HANDOFF.md after EVERY dispatch (append-only, " +
+            "survives compaction); read it and cite real artifact paths before planning " +
+            "follow-up work. Workflow: " +
+            "plan → dispatch → verify packs → re-dispatch failed subtasks with narrowed scope → integrate and submit.",
+        parameters = mapOf(
+            "plan" to AgentToolParam("string", "The complete plan summary (1-4 sentences): what the overall goal is and how the subtasks cover it. Shown to the user."),
+            // [T-android-dispatch-args-schema] subtasks MUST carry an items
+            // schema: an items-less array made models/gateways guess the shape
+            // and some serialized it as a JSON string → optJSONArray() null →
+            // misleading required-params error (five identical failures with
+            // valid payloads). Nested string-array fields get their own items.
+            "subtasks" to AgentToolParam("array", "2-8 subtask objects. MUST be a real JSON array of objects, never a string. Each: {id, title, instructions, read_paths[], write_paths[], tools[], group_id?, timeout_sec?, max_turns?}. instructions must be self-contained (goal, steps, output requirements); read_paths/write_paths are linux path globs (* segment, ** recursive, bare dir covers subtree) — empty write_paths forbids ALL file modification; tools ⊆ {file_read, file_write, file_edit, shell_execute}. DEFAULT (tools 留空): 当 read_paths 或 write_paths 非空时自动授予 {file_read, file_write, file_edit, shell_execute}（shell 用于 gradle/git/grep 等，PRoot 已限制在沙箱内）；仅当 read/write 全空才是纯推理任务（无工具）。显式 tools 会完全覆盖默认集。group_id optionally names a specific model group; timeout_sec ≤ 900; max_turns ≤ 16. 重要：read_paths/write_paths 必须是绝对路径（以 /var/minis-euleros/ 开头），相对前缀会被路径守卫拒绝。",
+                items = JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("id", AgentToolParam("string", "Unique task id, e.g. t1.").toJson())
+                        put("title", AgentToolParam("string", "Short task title.").toJson())
+                        put("instructions", AgentToolParam("string", "SELF-CONTAINED brief: goal, concrete steps, file paths, exactly what to return. Sub-agents see nothing of this conversation.").toJson())
+                        put("read_paths", AgentToolParam("array", "Linux path globs this subtask may read. Empty forbids ALL reads.", items = JSONObject().apply { put("type", "string") }).toJson())
+                        put("write_paths", AgentToolParam("array", "Linux path globs this subtask may write. Empty forbids ALL writes.", items = JSONObject().apply { put("type", "string") }).toJson())
+                        put("tools", AgentToolParam("array", "Allowed tools ⊆ {file_read, file_write, file_edit, shell_execute}.", items = JSONObject().apply { put("type", "string") }).toJson())
+                        put("group_id", AgentToolParam("string", "Optional model group id to route this subtask to.").toJson())
+                        put("timeout_sec", AgentToolParam("integer", "Per-subtask timeout, 30-900, default 300.").toJson())
+                        put("max_turns", AgentToolParam("integer", "Per-subtask tool turns, 1-16, default 8.").toJson())
+                    })
+                    put("required", JSONArray(listOf("instructions")))
+                }),
+            "mode" to AgentToolParam("string", "waves (default: write-colliding subtasks serialized, independent ones parallel) | sequential | parallel."),
+        ),
+        required = listOf("plan", "subtasks"),
+        propertyOrdering = listOf("plan", "subtasks", "mode"),
+    )
 
     // Aligned with iOS AIChatViewModel.swift:4982-4993
     private fun shellExecuteDefinition(): AgentToolDefinition = AgentToolDefinition(
@@ -57,6 +131,27 @@ object AgentTools {
         ),
         required = listOf("tool_title", "command"),
         propertyOrdering = listOf("tool_title", "command", "timeout", "delay"),
+    )
+
+    // Secondary Ubuntu 24.04 arm64 sandbox (apt ecosystem, gcc toolchain).
+    // Shares the host workspace folder with the main sandbox: files written
+    // via file_write under /var/minis-euleros/workspace appear at /workspace.
+    private fun ubuntuShellDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "ubuntu_shell",
+        description = "Run a command inside the secondary Ubuntu 24.04 (arm64) sandbox with the full " +
+            "Ubuntu apt ecosystem (gcc, make, python3, etc.) under PRoot — the main EulerOS sandbox is NOT modified. " +
+            "Use for tasks that need `apt install`, Ubuntu-native toolchains, or libraries unavailable in the main sandbox. " +
+            "The host workspace folder is mounted at /workspace (the same directory the main sandbox sees as " +
+            "/var/minis-euleros/workspace): write scripts with file_write first, then run them here. " +
+            "Each invocation spawns a fresh process (bash -lc); no shared state between calls except the filesystem.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user. Use the same language as the user."),
+            "command" to AgentToolParam("string", "Bash command to execute, e.g. \"apt-get update && apt-get install -y build-essential && gcc hello.c -o hello\". For long scripts, write to /workspace via file_write and run them here."),
+            "cwd" to AgentToolParam("string", "Working directory inside the sandbox (default: /workspace)."),
+            "timeout" to AgentToolParam("integer", "Timeout in seconds (default: 900, max: 1800)."),
+        ),
+        required = listOf("tool_title", "command"),
+        propertyOrdering = listOf("tool_title", "command", "cwd", "timeout"),
     )
 
     // Aligned with iOS AIChatViewModel.swift browser_use definition
