@@ -687,7 +687,15 @@ object PRootKernel {
 
     /** Subdirs that live under `minis-sessions/<sessionId>/` rather than the global pool.
      *  [T-workspace-global] `workspace` 有意不在此列：它与 memory/skills/shared 一样
-     *  全局共享（见 registerGlobalBindMounts），跨会话可见。 */
+     *  全局共享（见 registerGlobalBindMounts），跨会话可见。
+     *
+     *  ⚠️ attachments/offloads/browser 是**按会话隔离**的设计，不是 bug：
+     *  ContextOffload（大型输出落盘）、PhotosOffloadHandler、SubAgentRunner 的
+     *  reasoning 分页都调用 resolveSessionHostPath(sessionId, ...) 往本会话私有区写，
+     *  这样不同会话的离屏产物互不串扰。2026-09-29 排查时曾误判"offloads 被错误导向
+     *  app 私有区"——其实写成功了，只是落在 minis-sessions/<sid>/offloads/，在全局
+     *  /var/minis-euleros/offloads/ 当然找不到。任何需要**跨会话排查**的文件（如
+     *  subagent-journal）应落 workspace/.collab/，而非改本集合为全局。 */
     private val perSessionSubdirs = setOf("attachments", "offloads", "browser")
 
     /**
