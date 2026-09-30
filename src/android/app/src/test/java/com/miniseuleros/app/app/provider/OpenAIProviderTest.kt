@@ -462,4 +462,55 @@ class OpenAIProviderTest {
         assertEquals("xhigh", provider.clampEffort("xhigh", null))
         assertEquals("xhigh", provider.clampEffort("xhigh", emptyList()))
     }
+
+    // -- T-hw-gateway-utf8: ASCII-safe request bodies --
+
+    /**
+     * 2026-10-01: a local HW-code-path relay (127.0.0.1:8321) wedged on raw
+     * non-ASCII UTF-8 request bodies — headers written, then the connection
+     * stalls forever. JSON's \uXXXX escapes are a byte-identical alternative,
+     * so every request-body producer now serializes via [OpenAIProvider.asciiSafeJson].
+     */
+    @Test
+    fun `asciiSafeJson passes pure ASCII through unchanged`() {
+        val s = """{"model":"gpt","messages":[{"role":"user","content":"hi"}]}"""
+        assertTrue(provider.asciiSafeJson(s) === s)
+    }
+
+    @Test
+    fun `asciiSafeJson escapes CJK to lowercase hex escapes`() {
+        assertEquals("""\u4f60\u597d""", provider.asciiSafeJson("你好"))
+        // ASCII structural chars and already-escaped sequences stay intact.
+        assertEquals("""{"k":"a\u4f60b"}""", provider.asciiSafeJson("""{"k":"a你b"}"""))
+        // Idempotent: escaping an escaped body is a no-op.
+        val once = provider.asciiSafeJson("你好")
+        assertTrue(provider.asciiSafeJson(once) === once)
+    }
+
+    @Test
+    fun `asciiSafeJson escapes DEL and round-trips surrogate pairs`() {
+        assertEquals("""\u007f""", provider.asciiSafeJson("\u007F"))
+        // Emoji = one surrogate pair, escaped as two halves; org.json must
+        // decode back to the identical string.
+        val escaped = provider.asciiSafeJson("a😀b")
+        assertEquals("""a\ud83d\ude00b""", escaped)
+        assertEquals("a😀b", JSONObject("""{"v":"$escaped"}""").getString("v"))
+    }
+
+    @Test
+    fun `chat body with CJK goes out as pure ASCII bytes`() = runBlocking {
+        enqueueSse()
+
+        provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "你好，世界")), null, 1024)
+
+        val recorded = server.takeRequest()
+        val bytes = recorded.body.readByteArray()
+        assertTrue(
+            "request body must be pure ASCII, got ${bytes.size} bytes",
+            bytes.all { it in 0..0x7e },
+        )
+        val roundTripped = JSONObject(String(bytes, Charsets.UTF_8))
+        val text = roundTripped.getJSONArray("messages").getJSONObject(0).getString("content")
+        assertEquals("你好，世界", text)
+    }
 }

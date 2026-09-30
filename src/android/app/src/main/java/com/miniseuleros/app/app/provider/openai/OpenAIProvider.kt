@@ -728,7 +728,11 @@ class OpenAIProvider private constructor(
         val memBefore = com.miniseuleros.app.diagnostics.MemorySnapshot.capture()
         val serStartNs = System.nanoTime()
         val bodyStr = try {
-            body.toString()
+            // T-hw-gateway-utf8: escape non-ASCII to \uXXXX here — the ONE
+            // serialization point for chat/Responses/codex-image bodies — so
+            // both the OAuth and the non-OAuth RequestBody in buildRequest()
+            // go out as pure ASCII. Only the log-visible bodyLen grows.
+            asciiSafeJson(body.toString())
         } catch (t: Throwable) {
             com.miniseuleros.app.diagnostics.LargeAllocProbe.report(
                 "openai.body.toString", -1, "model=${model.id} messages=${messages.size}",
@@ -1712,7 +1716,9 @@ class OpenAIProvider private constructor(
         val builder = Request.Builder().url(url)
         if (verb != "GET" && bodyObject != null) {
             val jsonMediaType = "application/json".toMediaType()
-            val bodyBytes = bodyObject.toString().toByteArray(Charsets.UTF_8)
+            // T-hw-gateway-utf8: same ASCII-safe serialization as the chat
+            // path (model-use passthrough envelope can carry CJK tool args).
+            val bodyBytes = asciiSafeJson(bodyObject.toString()).toByteArray(Charsets.UTF_8)
             val requestBody = object : okhttp3.RequestBody() {
                 override fun contentType() = jsonMediaType
                 override fun contentLength() = bodyBytes.size.toLong()
@@ -1806,7 +1812,8 @@ class OpenAIProvider private constructor(
             for ((k, v) in imageExtraBody) body.put(k, v ?: JSONObject.NULL)
             body.put("model", model.id)
 
-            val bodyStr = body.toString()
+            // T-hw-gateway-utf8: ASCII-safe serialization (prompts are CJK-heavy).
+            val bodyStr = asciiSafeJson(body.toString())
             val jsonMediaType = "application/json".toMediaType()
             val bodyBytes = bodyStr.toByteArray(Charsets.UTF_8)
             val requestBody = object : okhttp3.RequestBody() {
@@ -2068,6 +2075,49 @@ class OpenAIProvider private constructor(
     // (T-android-toolresult-image-dropped) is a property of the request BODY,
     // and going through MockWebServer to read it only adds a network dependency
     // to a question that is pure JSON construction.
+    /**
+     * T-hw-gateway-utf8: ASCII-safe JSON serialization for request bodies.
+     *
+     * Some OpenAI-compatible gateways (2026-10-01: a local HW-code-path relay
+     * on 127.0.0.1:8321) wedge when the request body carries raw non-ASCII
+     * UTF-8 bytes — headers are written, then the connection stalls and the
+     * request never completes. JSON natively offers a byte-identical
+     * alternative: any non-ASCII char can be written as a \uXXXX escape,
+     * which every conforming parser decodes to the same string while the
+     * body stays pure ASCII. So we escape chars > 0x7E at serialization time.
+     *
+     * Applied at the three request-body producers (rawStreamMessage,
+     * rawPassthroughRequest, generateImage) so every JSON POST leaves the
+     * app as ASCII. Idempotent: a pure-ASCII body (including one already
+     * carrying \uXXXX escapes) passes through unchanged. UTF-16 surrogate
+     * halves are escaped individually (\uD83D\uDE00) — valid JSON, decodes
+     * to the same character.
+     *
+     * `internal` for the same reason as [buildRequestBody]: unit tests
+     * assert the escaping directly.
+     */
+    internal fun asciiSafeJson(bodyStr: String): String {
+        var hasNonAscii = false
+        for (c in bodyStr) {
+            if (c > '\u007e') { hasNonAscii = true; break }
+        }
+        if (!hasNonAscii) return bodyStr
+        val sb = StringBuilder(bodyStr.length + 16)
+        for (c in bodyStr) {
+            if (c <= '\u007e') {
+                sb.append(c)
+            } else {
+                sb.append("\\u")
+                val v = c.code
+                sb.append("0123456789abcdef"[(v ushr 12) and 0xf])
+                sb.append("0123456789abcdef"[(v ushr 8) and 0xf])
+                sb.append("0123456789abcdef"[(v ushr 4) and 0xf])
+                sb.append("0123456789abcdef"[v and 0xf])
+            }
+        }
+        return sb.toString()
+    }
+
     internal fun buildRequestBody(
         messages: List<LLMMessage>,
         systemPrompt: String?,
