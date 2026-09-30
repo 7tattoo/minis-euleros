@@ -35,8 +35,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.miniseuleros.app.R
 import com.miniseuleros.app.sandbox.UbuntuSandbox
 import com.miniseuleros.app.sandbox.UbuntuSandbox.InstallState
 import kotlinx.coroutines.Dispatchers
@@ -81,28 +83,34 @@ fun UbuntuSandboxScreen(onBack: () -> Unit) {
     }
     LaunchedEffect(Unit) { refreshStatus() }
 
-    SettingsScaffold(title = "Ubuntu Sandbox", onBack = onBack) {
+    SettingsScaffold(title = stringResource(R.string.ubuntu_sandbox_title), onBack = onBack) {
         SettingsSection(
-            header = "Status",
-            footer = "Files under /var/minis-euleros/workspace are mounted at /workspace inside Ubuntu. " +
-                "The main sandbox is never modified by anything installed here.",
+            header = stringResource(R.string.ubuntu_sandbox_status_header),
+            footer = stringResource(R.string.ubuntu_sandbox_status_footer),
         ) {
             SettingsRow(
-                title = if (installed) "Installed" else "Not installed",
-                subtitle = if (installed) "Ubuntu 24.04 LTS (arm64) · ${sizeMb} MB · apt ready" else
-                    "Ubuntu Base 24.04.3 arm64, ~27 MB download",
+                title = if (installed) stringResource(R.string.ubuntu_sandbox_installed)
+                    else stringResource(R.string.ubuntu_sandbox_not_installed),
+                subtitle = if (installed) stringResource(R.string.ubuntu_sandbox_installed_subtitle, sizeMb)
+                    else stringResource(R.string.ubuntu_sandbox_not_installed_subtitle),
                 icon = androidx.compose.material.icons.Icons.Filled.Terminal,
             )
         }
 
-        SettingsSection(header = "Install") {
+        SettingsSection(header = stringResource(R.string.ubuntu_sandbox_install_header)) {
             when (val state = installState) {
                 is InstallState.Downloading -> {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
                         val total = state.totalBytes
                         val text = if (total > 0)
-                            "Downloading… ${state.bytes / (1024 * 1024)} / ${total / (1024 * 1024)} MB"
-                        else "Downloading… ${state.bytes / (1024 * 1024)} MB"
+                            stringResource(
+                                R.string.ubuntu_sandbox_downloading,
+                                state.bytes / (1024 * 1024), total / (1024 * 1024),
+                            )
+                        else stringResource(
+                            R.string.ubuntu_sandbox_downloading_unknown_size,
+                            state.bytes / (1024 * 1024),
+                        )
                         Text(text, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(8.dp))
                         if (total > 0) {
@@ -115,24 +123,29 @@ fun UbuntuSandboxScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                InstallState.Extracting -> ProgressLine("Extracting rootfs…")
-                InstallState.Patching -> ProgressLine("Patching (DNS / apt sources)…")
+                InstallState.Extracting -> ProgressLine(stringResource(R.string.ubuntu_sandbox_extracting))
+                InstallState.Patching -> ProgressLine(stringResource(R.string.ubuntu_sandbox_patching))
                 is InstallState.Failed -> {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
-                        Text("Install failed: ${state.message}", color = MaterialTheme.colorScheme.error)
+                        Text(
+                            stringResource(R.string.ubuntu_sandbox_install_failed, state.message),
+                            color = MaterialTheme.colorScheme.error,
+                        )
                         Spacer(Modifier.height(8.dp))
-                        Button(onClick = { UbuntuSandbox.startInstall(context) }) { Text("Retry") }
+                        Button(onClick = { UbuntuSandbox.startInstall(context) }) {
+                            Text(stringResource(R.string.ubuntu_sandbox_retry))
+                        }
                     }
                 }
                 else -> {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
                         if (!installed) {
                             Button(onClick = { UbuntuSandbox.startInstall(context) }) {
-                                Text("Install Ubuntu 24.04 sandbox")
+                                Text(stringResource(R.string.ubuntu_sandbox_install_button))
                             }
                         } else {
                             OutlinedButton(onClick = { UbuntuSandbox.startInstall(context) }) {
-                                Text("Reinstall (reset rootfs)")
+                                Text(stringResource(R.string.ubuntu_sandbox_reinstall_button))
                             }
                         }
                     }
@@ -141,10 +154,10 @@ fun UbuntuSandboxScreen(onBack: () -> Unit) {
         }
 
         if (installed) {
-            SettingsSection(header = "Danger zone") {
+            SettingsSection(header = stringResource(R.string.ubuntu_sandbox_danger_header)) {
                 SettingsRow(
-                    title = "Delete rootfs",
-                    subtitle = "Frees ${sizeMb} MB. Files in /workspace are kept.",
+                    title = stringResource(R.string.ubuntu_sandbox_delete_title),
+                    subtitle = stringResource(R.string.ubuntu_sandbox_delete_subtitle, sizeMb),
                     icon = androidx.compose.material.icons.Icons.Filled.Delete,
                     iconColor = MaterialTheme.colorScheme.error,
                     onClick = { showDeleteConfirm = true },
@@ -153,14 +166,12 @@ fun UbuntuSandboxScreen(onBack: () -> Unit) {
         }
 
         SettingsSection(
-            header = "How to use",
-            footer = "Example: file_write a script to /var/minis-euleros/workspace/hello.py, " +
-                "then ubuntu_shell \"cd /workspace && python3 hello.py\".",
+            header = stringResource(R.string.ubuntu_sandbox_howto_header),
+            footer = stringResource(R.string.ubuntu_sandbox_howto_footer),
         ) {
             SettingsRow(
-                title = "ubuntu_shell tool",
-                subtitle = "Available to the agent once installed. Commands run as root " +
-                    "under proot with /workspace bound in; timeout up to 30 min.",
+                title = stringResource(R.string.ubuntu_sandbox_tool_title),
+                subtitle = stringResource(R.string.ubuntu_sandbox_tool_subtitle),
             )
         }
     }
@@ -168,18 +179,21 @@ fun UbuntuSandboxScreen(onBack: () -> Unit) {
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Ubuntu rootfs?") },
-            text = { Text("This removes the Ubuntu 24.04 rootfs (about ${sizeMb} MB). " +
-                "Files you created under /workspace (the shared workspace folder) are NOT deleted.") },
+            title = { Text(stringResource(R.string.ubuntu_sandbox_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.ubuntu_sandbox_delete_confirm_text, sizeMb)) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     UbuntuSandbox.delete(context)
                     installed = false
                     sizeMb = 0
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.delete)) }
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
     }
 }

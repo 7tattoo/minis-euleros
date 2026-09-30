@@ -3397,6 +3397,9 @@ fun ChatScreen(
                 // prewarm when (if) it has finished by then, else -1.
                 var lastColdPrewarmMs by remember(sessionId) { mutableStateOf(-1L) }
                 var coldOpenSummaryEmitted by remember(sessionId) { mutableStateOf(false) }
+                // [T-layout-storm 2026-09-30] Mutable holder for the newest-row
+                // onPlaced rate limiting / storm detection above.
+                val placedDiagState = remember(sessionId) { PlacedDiagState() }
                 val screenMountAtMs = remember(sessionId) { System.currentTimeMillis() }
                 // T-streaming-side-channel: messages-level changes (new
                 // message, retry, etc.) AND streamingById deltas both feed
@@ -3960,11 +3963,20 @@ fun ChatScreen(
                             })
                         }
                     }
-                    items(
+                    // [T-layout-storm 2026-09-30] itemsIndexed so the newest-row
+                    // check below is an O(1) index compare — the previous
+                    // `item == flatItems.lastOrNull()` ran a data-class equals
+                    // (content String comparison) against the 25K+ newest item
+                    // for EVERY row on EVERY recomposition.
+                    itemsIndexed(
                         items = flatItems.asReversed(),
-                        key = { it.key },
-                        contentType = { it.contentType },
-                    ) { item ->
+                        key = { _, it -> it.key },
+                        contentType = { _, it -> it.contentType },
+                    ) { itemIndex, item ->
+                        // [T-layout-storm 2026-09-30] In the reversed list the
+                        // newest message is index 0, so the reference/equals
+                        // comparison is replaced by a constant-time check.
+                        val isNewestItem = itemIndex == 0
                         // [Perf][LongCtx] T-android-long-ctx-reentry-perf:
                         // the newest message (index 0 in reverseLayout) is
                         // the first row painted in the viewport — its
@@ -4023,18 +4035,50 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        val isNewestItem = item == flatItems.lastOrNull()
                         Box(
                             modifier = Modifier
                                 .alpha(rowAlpha)
                                 .then(
                                     if (isNewestItem) {
                                         Modifier.onPlaced {
-                                            com.miniseuleros.app.diagnostics.PerfLongCtx.step(
-                                                sessionId,
-                                                "lazyColumn.firstItem.placed",
-                                                "size=${it.size.width}x${it.size.height}",
-                                            )
+                                            // [T-layout-storm 2026-09-30] Rate-limit the
+                                            // per-placement logging: full rate for the first
+                                            // 3 placements (cold-open timeline), then at most
+                                            // one line per second. When >=8 placements land
+                                            // within a 1s window (layout storm: newest row
+                                            // re-laying out every frame without new content —
+                                            // observed 2026-09-30 as 30+ placements/s with
+                                            // javaHeap climbing 3-4MB/frame until a 389ms GC
+                                            // froze the main thread → ANR), emit ONE snapshot
+                                            // line per storm so the next hang log pins the
+                                            // loop down.
+                                            val placedState = placedDiagState
+                                            val nowMs = System.currentTimeMillis()
+                                            if (nowMs - placedState.windowStartMs > 1000L) {
+                                                placedState.windowStartMs = nowMs
+                                                placedState.windowCount = 0
+                                                placedState.stormLogged = false
+                                            }
+                                            placedState.windowCount++
+                                            if (placedState.windowCount >= 8 && !placedState.stormLogged) {
+                                                placedState.stormLogged = true
+                                                AppLogger.info(
+                                                    "Perf",
+                                                    "[T-LAYOUT-STORM] newest row re-placed ${placedState.windowCount}x within 1s " +
+                                                        "size=${it.size.width}x${it.size.height} rows=${flatItems.size} " +
+                                                        "newestKey=${flatItems.lastOrNull()?.key} " +
+                                                        "msgs=${messages.size} streaming=${streamingById.isNotEmpty()}",
+                                                )
+                                            }
+                                            if (placedState.count <= 3 || nowMs - placedState.lastLogAtMs >= 1000L) {
+                                                placedState.count++
+                                                placedState.lastLogAtMs = nowMs
+                                                com.miniseuleros.app.diagnostics.PerfLongCtx.step(
+                                                    sessionId,
+                                                    "lazyColumn.firstItem.placed",
+                                                    "size=${it.size.width}x${it.size.height}",
+                                                )
+                                            }
                                             // [T-android-jank-diag-logging]
                                             // One quotable line per session
                                             // open, after the first frame's
@@ -7342,5 +7386,27 @@ private fun ThinkingLevelSheet(
         }
     }
 }
+
+/**
+ * [T-layout-storm 2026-09-30] Mutable state for rate-limiting the newest-row
+ * `onPlaced` diagnostics in [ChatScreen]. Kept as a plain class (not Compose
+ * state) — the fields are only read inside the placement callback itself, so
+ * mutations here never trigger recomposition.
+ *
+ * count/lastLogAtMs throttle the per-placement `PerfLongCtx.step` line to the
+ * first 3 placements plus at most one line per second afterwards.
+ * windowStartMs/windowCount/stormLogged detect and snapshot layout storms:
+ * >=8 placements of the newest row within a rolling 1s window (with constant
+ * content size — the observed 2026-09-30 hang signature) log exactly one
+ * [T-LAYOUT-STORM] line per storm, clearing after a quiet second.
+ */
+private class PlacedDiagState {
+    var count = 0
+    var lastLogAtMs = 0L
+    var windowStartMs = 0L
+    var windowCount = 0
+    var stormLogged = false
+}
+
 
 
