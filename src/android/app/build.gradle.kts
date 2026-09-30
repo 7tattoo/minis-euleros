@@ -27,7 +27,7 @@ android {
     // MinisEulerOS: pin the NDK that is actually installed in the build
     // environment (r29 with the native aarch64 toolchain). AGP's default
     // (r27) is absent here and would try to auto-download.
-    ndkVersion = "29.0.14206865"
+    ndkVersion = "27.2.12479018"
     // [T-android-dynamic-island] Bumped 35→36 so the Android 16 (Baklava)
     // Live Updates APIs — Notification.ProgressStyle, FLAG_PROMOTED_ONGOING,
     // NotificationManager.canPostPromotedNotifications(), setShortCriticalText —
@@ -40,8 +40,8 @@ android {
         applicationId = "com.openminis.tattoo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 45
-        versionName = "1.15.4"
+        versionCode = 46
+        versionName = "1.15.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
