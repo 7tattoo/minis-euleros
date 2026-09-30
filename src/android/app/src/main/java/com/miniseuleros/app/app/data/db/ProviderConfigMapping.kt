@@ -46,6 +46,16 @@ object ProviderConfigMetaKeys {
     const val VOICE_OUTPUT_GROUP_ID = "voice_output_group_id"
     // [T-android-vision-group / GH#182] Vision Group pointer (per-device meta KV).
     const val VISION_GROUP_ID = "vision_group_id"
+    // [T-android-compact-summary-model][T-android-subagent-pool] Meta KV rows
+    // for the compact-summary and sub-agent group bindings. Field-test
+    // lesson (2026-09-26, v37): both fields existed on ProviderConfig and
+    // their setters/saveConfig ran fine, but they were absent here — so
+    // toSnapshot dropped them, the canonicalized config came back without
+    // them, and the 压缩摘要/子代理 dropdowns snapped back to 无 on every
+    // tap (while Default Primary/Sub, which WERE mapped, worked). Any new
+    // ProviderConfig group pointer MUST be added to BOTH mapping directions.
+    const val COMPACT_SUMMARY_GROUP_ID = "compact_summary_group_id"
+    const val SUB_AGENT_GROUP_ID = "sub_agent_group_id"
     const val JSON_SYNC_HASH = "json_sync_hash"
 }
 
@@ -181,6 +191,12 @@ fun ProviderConfig.toSnapshot(
     visionGroupId?.let {
         metaRows.add(ProviderConfigMetaEntity(ProviderConfigMetaKeys.VISION_GROUP_ID, it))
     }
+    compactSummaryGroupId?.let {
+        metaRows.add(ProviderConfigMetaEntity(ProviderConfigMetaKeys.COMPACT_SUMMARY_GROUP_ID, it))
+    }
+    subAgentGroupId?.let {
+        metaRows.add(ProviderConfigMetaEntity(ProviderConfigMetaKeys.SUB_AGENT_GROUP_ID, it))
+    }
     jsonSyncHash?.let {
         metaRows.add(ProviderConfigMetaEntity(ProviderConfigMetaKeys.JSON_SYNC_HASH, it))
     }
@@ -275,6 +291,8 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
         voiceInputGroupId = metaMap[ProviderConfigMetaKeys.VOICE_INPUT_GROUP_ID],
         voiceOutputGroupId = metaMap[ProviderConfigMetaKeys.VOICE_OUTPUT_GROUP_ID],
         visionGroupId = metaMap[ProviderConfigMetaKeys.VISION_GROUP_ID],
+        compactSummaryGroupId = metaMap[ProviderConfigMetaKeys.COMPACT_SUMMARY_GROUP_ID],
+        subAgentGroupId = metaMap[ProviderConfigMetaKeys.SUB_AGENT_GROUP_ID],
         agentLoopModelEntryIds = entryLoopIds,
         agentLoopGroupIds = groupLoopIds,
     )

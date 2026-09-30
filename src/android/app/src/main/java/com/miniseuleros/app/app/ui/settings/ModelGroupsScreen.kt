@@ -2,6 +2,7 @@ package com.miniseuleros.app.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Image
@@ -38,20 +40,20 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -310,6 +312,42 @@ fun ModelGroupsScreen(
                             selectedId = config.defaultSubGroupId,
                             onSelect = { providerRepository.defaultSubGroupId = it },
                         )
+                        // [T-android-compact-summary-model] Compaction summary
+                        // group — the model that generates context-compaction
+                        // summaries. Empty → the active chat model handles it.
+                        SectionDivider()
+                        GroupDropdown(
+                            label = stringResource(R.string.model_groups_compact_summary),
+                            groups = groups,
+                            selectedId = config.compactSummaryGroupId,
+                            onSelect = { providerRepository.compactSummaryGroupId = it },
+                        )
+                        // [T-android-subagent-orchestration] Default sub-agent
+                        // group for dispatch_subtasks (multi-model
+                        // orchestration). Per-task group_id from the planner
+                        // overrides this binding. Empty → the tool stays
+                        // hidden unless the planner names an existing group.
+                        SectionDivider()
+                        GroupDropdown(
+                            label = stringResource(R.string.model_groups_sub_agent),
+                            groups = groups,
+                            selectedId = config.subAgentGroupId,
+                            onSelect = { providerRepository.subAgentGroupId = it },
+                        )
+                        // [T-android-subagent-collab-chip][T-android-subagent-pool]
+                        // Pooling how-to — the binding selects a GROUP (pool),
+                        // not a single model: subtasks rotate across the
+                        // group's available members by ordinal. Field testing
+                        // (2026-09-26) showed users expecting a flat model
+                        // list here and no obvious create-group path, so the
+                        // affordance is spelled out under the dropdown.
+                        Text(
+                            text = stringResource(R.string.model_groups_sub_agent_hint),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            style = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
+                        )
                         // [T-android-provider-voice] Voice group bindings —
                         // mirrors iOS voiceInputGroupId / voiceOutputGroupId.
                         SectionDivider()
@@ -485,27 +523,41 @@ private fun GroupDropdown(
     selectedId: String?,
     onSelect: (String?) -> Unit,
 ) {
+    // [T-android-subagent-dropdown-dead] Field report 2026-09-26: menu items
+    // inside ExposedDropdownMenuBox ignored ALL taps on device (BOM
+    // 2025.09.00) — 无/Voice groups/user groups alike, exactly the four
+    // options in the screenshot. Replaced with the battle-tested plain
+    // DropdownMenu + tap-overlay pattern: the transparent overlay intercepts
+    // touches before the readOnly TextField (cursor/selection eater), and
+    // plain DropdownMenu popups have no tap-swallowing history.
     var expanded by remember { mutableStateOf(false) }
     val selectedName = groups.find { it.id == selectedId }?.name ?: stringResource(R.string.model_groups_none)
 
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
+    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         OutlinedTextField(
             value = selectedName,
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
+            trailingIcon = { Icon(Icons.Outlined.ArrowDropDown, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth(),
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(MaterialTheme.shapes.extraSmall)
+                .clickable { expanded = true },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = 420.dp),
+        ) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.model_groups_none)) },
+                leadingIcon = {
+                    if (selectedId == null) Icon(Icons.Filled.Check, contentDescription = null)
+                },
                 onClick = {
                     onSelect(null)
                     expanded = false
@@ -514,6 +566,9 @@ private fun GroupDropdown(
             groups.forEach { group ->
                 DropdownMenuItem(
                     text = { Text(group.name) },
+                    leadingIcon = {
+                        if (selectedId == group.id) Icon(Icons.Filled.Check, contentDescription = null)
+                    },
                     onClick = {
                         onSelect(group.id)
                         expanded = false

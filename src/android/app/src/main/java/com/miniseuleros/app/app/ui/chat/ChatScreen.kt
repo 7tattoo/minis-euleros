@@ -102,6 +102,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.AppShortcut
 import androidx.compose.material.icons.filled.ArrowCircleUp
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -138,6 +139,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ripple
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
 import com.miniseuleros.app.ui.settings.SettingsSwitch
@@ -163,6 +165,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -3085,6 +3088,66 @@ fun ChatScreen(
                                     )
                                 },
                             )
+                            // [T-android-thinking-watchdog] Runaway-thinking
+                            // guard: cap the pre-content thinking phase; an
+                            // overrun aborts the stream and retries once with
+                            // thinking OFF, so the server never cuts the SSE
+                            // connection mid-loop. 0 = disabled. Lives beside
+                            // Auto Compact because both are model-invocation
+                            // safety controls the user flips mid-conversation.
+                            val thinkingWatchdogSec by viewModel.thinkingWatchdogSeconds.collectAsState()
+                            var showThinkingWatchdogDialog by remember { mutableStateOf(false) }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_menu_thinking_watchdog)) },
+                                onClick = { showThinkingWatchdogDialog = true },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Schedule, contentDescription = null)
+                                },
+                                trailingIcon = {
+                                    Text(
+                                        if (thinkingWatchdogSec > 0) "${thinkingWatchdogSec}s"
+                                        else stringResource(R.string.thinking_watchdog_off),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                },
+                            )
+                            if (showThinkingWatchdogDialog) {
+                                val watchdogOptions = listOf(0, 60, 120, 180, 300, 600)
+                                AlertDialog(
+                                    onDismissRequest = { showThinkingWatchdogDialog = false },
+                                    title = { Text(stringResource(R.string.chat_menu_thinking_watchdog)) },
+                                    text = {
+                                        Column {
+                                            watchdogOptions.forEach { sec ->
+                                                Row(
+                                                    Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            viewModel.setThinkingWatchdogSeconds(sec)
+                                                            showThinkingWatchdogDialog = false
+                                                        }
+                                                        .padding(vertical = 10.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    RadioButton(
+                                                        selected = thinkingWatchdogSec == sec,
+                                                        onClick = {
+                                                            viewModel.setThinkingWatchdogSeconds(sec)
+                                                            showThinkingWatchdogDialog = false
+                                                        },
+                                                    )
+                                                    Text(
+                                                        if (sec > 0) "${sec}s"
+                                                        else stringResource(R.string.thinking_watchdog_off),
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {},
+                                )
+                            }
                             // T287: debug-only crash trigger so the user can verify
                             // ACRA/native crash log generation (T283). Throws a
                             // RuntimeException from the click handler — the
@@ -6111,6 +6174,51 @@ fun ChatScreen(
                                 fontStyle = FontStyle.Italic,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+
+                        // [T-android-subagent-collab-chip] Coomi-style mode
+                        // chip (参考 Coomi 输入框的 计划/协作/询问 pills): a
+                        // pill toggle for multi-model orchestration
+                        // (dispatch_subtasks). Visible only when the
+                        // structural gate passes — a sub-agent group can
+                        // resolve (Settings → 模型组 → 子代理 bound, or any
+                        // group exists) — otherwise the toggle would dead-end.
+                        // Tapping flips SubAgentCollabPrefs (persisted,
+                        // default OFF): ON adds dispatch_subtasks to the tool
+                        // schema AND the orchestration workflow section to the
+                        // system prompt; OFF removes both. Hidden during
+                        // message-edit like the TTS capsule
+                        // (T-android-edit-readreplies-hide: two capsules plus
+                        // the +/slash/mic/send groups overflow narrow widths).
+                        val collabAvailable by viewModel.subAgentCollabAvailable.collectAsState()
+                        val collabEnabled by viewModel.subAgentCollabEnabled.collectAsState()
+                        val editingIdForChip by viewModel.editingMessageId.collectAsState()
+                        if (collabAvailable && editingIdForChip == null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (collabEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                        else ChatColors.secondaryText.copy(alpha = 0.10f),
+                                    )
+                                    .clickable { viewModel.setSubAgentCollabEnabled(!collabEnabled) }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.AccountTree,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = if (collabEnabled) MaterialTheme.colorScheme.primary else ChatColors.secondaryText,
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    stringResource(R.string.chat_chip_collab),
+                                    fontSize = 13.sp,
+                                    color = if (collabEnabled) MaterialTheme.colorScheme.primary else ChatColors.secondaryText,
+                                )
+                            }
                         }
 
                         // T187: Exit Edit Mode pill, only while editingMessageId

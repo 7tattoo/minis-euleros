@@ -37,6 +37,7 @@ internal class JiebaEngine(context: Context) {
     @Synchronized
     fun ensureInitialized(): Boolean {
         if (initialized) return true
+        if (!nativeLoaded) return false
         return try {
             val dictDir = extractDictionaries()
             initialized = nativeInit(dictDir.absolutePath)
@@ -131,8 +132,33 @@ internal class JiebaEngine(context: Context) {
 
         private val DICT_FILES = listOf("jieba.dict.utf8", "hmm_model.utf8")
 
+        /**
+         * [T-local-build-missing-ndk] The native lib is loaded best-effort.
+         * A build without the CMake step ships no `lib/<abi>/` entries, so
+         * `System.loadLibrary` throws `UnsatisfiedLinkError` right here in the
+         * companion init block — before any of this class's own try/catch can
+         * see it — and the `ExceptionInInitializerError` walks straight up
+         * into the caller. Observed crash: a Compose touch dispatch called
+         * `VoiceCorrection.mineVocabularyIfNeeded` → `ensureInitialized` →
+         * `TextSegmenter.getInstance` → `JiebaEngine.<clinit>` on the main
+         * thread and took the app down. Swallowing the load here keeps the
+         * Chinese path falling back to the system engine exactly as it does
+         * when dictionary extraction fails.
+         */
+        @Volatile
+        private var nativeLoaded = false
+
         init {
-            System.loadLibrary("jieba_jni")
+            try {
+                System.loadLibrary("jieba_jni")
+                nativeLoaded = true
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    TAG,
+                    "libjieba_jni.so unavailable — Chinese text falls back to the system engine",
+                    t,
+                )
+            }
         }
     }
 }

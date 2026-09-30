@@ -40,8 +40,8 @@ android {
         applicationId = "com.openminis.tattoo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.13"
+        versionCode = 43
+        versionName = "1.15.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

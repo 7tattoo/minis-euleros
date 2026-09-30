@@ -19,6 +19,7 @@ import com.miniseuleros.app.provider.applyUserAgentOverride
 import com.miniseuleros.app.provider.safeOptString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -211,6 +212,29 @@ class OpenAIProvider private constructor(
          * [STREAM_TTFB_TIMEOUT_MS] takes over.
          */
         private const val STREAM_UPLOAD_CAP_MS = 120_000L
+
+        /**
+         * [T-sse-read-idle-watchdog] Mid-stream read-idle bound. Once response
+         * HEADERS have arrived, if not a single SSE line (delta, keepalive,
+         * anything) arrives for this long, the upstream is treated as dead and
+         * the call is aborted. Caught live on 2026-09-28: the loomy gateway's
+         * qwen-3.8-max route died mid tool-args and held the SSE open for
+         * exactly 60.0s (its own fixed idle timeout) before closing without
+         * finish_reason — the client sat through the whole dead window doing
+         * nothing, because OkHttp's readTimeout(600s) only bounds a single
+         * fully-silent socket read and a 60s dead hold is invisible to it.
+         * This watchdog turns a 60s dead-air wait into a 20s abort; the
+         * truncated stream then flows into the transparent-retry path
+         * ([T-sse-trunc-retry]) in ChatViewModel instead of burning the full
+         * idle window. 20s: comfortably above legit think-pauses between
+         * deltas (reasoning models emit reasoning deltas continuously), far
+         * below the observed 60s dead window. NOT applied before headers —
+         * [STREAM_TTFB_TIMEOUT_MS] owns that phase.
+         */
+        private const val STREAM_READ_IDLE_TIMEOUT_MS = 20_000L
+
+        /** [T-sse-read-idle-watchdog] Poll cadence for the read-idle watchdog. */
+        private const val STREAM_READ_IDLE_POLL_MS = 500L
 
         /**
          * Factory for OAuth-bearer OpenAI-compatible providers that aren't
@@ -646,6 +670,12 @@ class OpenAIProvider private constructor(
         messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel,
     ).failOnSilentEmptyCompletion(name)
 
+    // @OptIn(InternalCoroutinesApi): invokeOnCompletion(onCancelling = true)
+    // is the only hook that fires DURING cancellation initiation (public
+    // onCancelling=false fires only at final state, which a coroutine blocked
+    // in a socket read never reaches). The 3-arg overload has been
+    // byte-stable since 1.0 (the public overload delegates to it).
+    @OptIn(kotlinx.coroutines.InternalCoroutinesApi::class)
     private fun rawStreamMessage(
         messages: List<LLMMessage>,
         systemPrompt: String?,
@@ -753,6 +783,25 @@ class OpenAIProvider private constructor(
         // (b) evict THIS ONE connection on timeout.
         val watchState = CallWatchState()
         val call = client.newCall(request.newBuilder().tag(CallWatchState::class.java, watchState).build())
+        // [T-android-stream-force-cancel] The T171 awaitClose{call.cancel()}
+        // cleanup below only runs once this producer block REACHES awaitClose
+        // — but a consumer-side cancel (user stop, thinking-watchdog throw,
+        // compact withTimeout, model fallback) marks this producer job
+        // cancelled while its body is parked inside the OkHttp blocking read,
+        // where cancellation is unobservable: the coroutine does not unwind
+        // until the 600s readTimeout, so ChannelFlow.collect's coroutineScope
+        // keeps waiting on this child and the whole caller chain (agent loop,
+        // compaction, model fallback) hangs with it. invokeOnCompletion(
+        // onCancelling = true) fires SYNCHRONOUSLY at cancellation initiation
+        // — on the cancelling thread, regardless of what the coroutine body
+        // is doing — so call.cancel() closes the socket and the parked read
+        // throws immediately. Normal completion disposes the handle first
+        // (before channel.close below), preserving pooled-connection reuse;
+        // cancel and error paths intentionally leave it armed (cancelling a
+        // dead call is a harmless no-op).
+        val forceCancelHandle = coroutineContext[Job]?.invokeOnCompletion(
+            onCancelling = true,
+        ) { runCatching { call.cancel() } }
         // [T-android-stale-conn-retry-hang] Time-to-first-byte watchdog. A
         // request written into a dead pooled h2 tunnel (local proxy socket
         // survives a network flap) produces NO further events — no headers,
@@ -875,6 +924,47 @@ class OpenAIProvider private constructor(
 
         val reader = BufferedReader(InputStreamReader(response.body!!.byteStream()))
 
+        // [T-sse-read-idle-watchdog] Mid-stream read-idle guard. Replaces the
+        // "hold the socket and hope" behaviour observed on 2026-09-28: the
+        // loomy gateway's qwen-3.8-max route died ~3.6s into streaming a
+        // dispatch_subtasks tool-args payload and then held the SSE open for
+        // exactly 60.0s (its own fixed idle timeout) before closing without
+        // finish_reason. OkHttp's readTimeout(600s) never fired — 60s of dead
+        // air is comfortably inside it — so the client sat through the whole
+        // window doing nothing.
+        //
+        // Armed only AFTER response headers (the pre-header phase is already
+        // covered by the TTFB/upload watchdog above, which is cancelled in its
+        // own finally). lastLineAtNanos is refreshed on every physical SSE
+        // line by the read loop, so any real traffic — deltas, keepalives,
+        // comments — keeps the stream alive indefinitely. Only a TOTAL silence
+        // longer than the budget trips it.
+        //
+        // On trip we cancel the call and raise TransientError, which the
+        // ChatViewModel agent loop already classifies as retry-on-same-provider
+        // (short countdown + partial-block rollback) — so the dead 60s becomes
+        // a ~20s abort and one clean retry. Connection eviction is deliberately
+        // NOT done here (unlike the TTFB watchdog): the headers already
+        // succeeded, so this is an upstream-stall, not a stale pooled socket.
+        val lastSseLineAtNanos = java.util.concurrent.atomic.AtomicLong(System.nanoTime())
+        val readIdleTimedOut = java.util.concurrent.atomic.AtomicBoolean(false)
+        val readIdleWatchdog = launch {
+            while (true) {
+                delay(STREAM_READ_IDLE_POLL_MS)
+                val idleMs = (System.nanoTime() - lastSseLineAtNanos.get()) / 1_000_000L
+                if (idleMs >= STREAM_READ_IDLE_TIMEOUT_MS) {
+                    readIdleTimedOut.set(true)
+                    com.miniseuleros.app.logging.AppLogger.warning(
+                        "OpenAIProvider",
+                        "[T-sse-read-idle-watchdog] no SSE line for ${idleMs}ms mid-stream " +
+                            "(model=${model.id}) — aborting instead of waiting out the gateway's idle timeout",
+                    )
+                    call.cancel()
+                    return@launch
+                }
+            }
+        }
+
         // [T-codex-gpt-image2-oauth-android] gpt-image-2: the Codex backend
         // streams the image as a base64 blob (PNG / JPEG / WebP) inside the SSE
         // `image_generation_call` output item; there's no incremental text/tool
@@ -892,6 +982,7 @@ class OpenAIProvider private constructor(
                 reader.close()
                 response.close()
             }
+            forceCancelHandle?.dispose()
             channel.close()
             awaitClose {
                 try { call.cancel() } catch (_: Exception) {}
@@ -955,6 +1046,12 @@ class OpenAIProvider private constructor(
 
             while (reader.readLine().also { line = it } != null) {
                 val l = line ?: continue
+                // [T-sse-read-idle-watchdog] Any line at all counts as liveness —
+                // including `:` keepalives and comment lines, which the
+                // data: filter below would otherwise discard. Refreshed
+                // BEFORE the filtering so a keepalive-only stream (a healthy
+                // but silent model) is never mistaken for a dead one.
+                lastSseLineAtNanos.set(System.nanoTime())
                 // Tolerate `data:` with or without the optional space — the
                 // HTML5 SSE spec only treats one leading space as ignorable,
                 // and some OpenAI-compatible servers (e.g. China Telecom's
@@ -1122,7 +1219,7 @@ class OpenAIProvider private constructor(
                                 val itemId = item.optString("id", "")
                                 val acc = responsesToolCalls.remove(itemId) ?: continue
                                 val argsStr = item.optString("arguments", acc.args.toString())
-                                val args = try { JSONObject(argsStr) } catch (_: Exception) { JSONObject() }
+                                val args = parseToolArgs(argsStr)
                                 val combined = combineResponsesAPIIds(acc.callId, itemId)
                                 android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete (Responses) id=$combined name=${acc.name} args=${args.toString().take(300)}")
                                 send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
@@ -1404,7 +1501,7 @@ class OpenAIProvider private constructor(
             // Emit ToolCallComplete for all accumulated tool calls
             for ((_, acc) in toolCallAccumulators) {
                 if (acc.id.isNotEmpty() && acc.name.isNotEmpty()) {
-                    val args = try { JSONObject(acc.args.toString()) } catch (_: Exception) { JSONObject() }
+                    val args = parseToolArgs(acc.args.toString())
                     android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete id=${acc.id} name=${acc.name} args=${args.toString().take(300)}")
                     send(LLMStreamChunk.ToolCallComplete(acc.id, acc.name, args))
                 }
@@ -1417,7 +1514,7 @@ class OpenAIProvider private constructor(
             // disappears (T247 root cause; same path hit by T237 DeepSeek truncation).
             for ((itemId, acc) in responsesToolCalls) {
                 if (acc.callId.isNotEmpty() && acc.name.isNotEmpty()) {
-                    val args = try { JSONObject(acc.args.toString()) } catch (_: Exception) { JSONObject() }
+                    val args = parseToolArgs(acc.args.toString())
                     val combined = combineResponsesAPIIds(acc.callId, itemId)
                     com.miniseuleros.app.logging.AppLogger.warning(
                         "OpenAIProvider",
@@ -1482,6 +1579,44 @@ class OpenAIProvider private constructor(
                         "contentLen=$contentLen reasoningLen=$reasoningLen " +
                         "toolCallEvents=$toolCallEventCount sawUsage=$sawUsageBlock model=${model.id}"
                 )
+                // [T-sse-trunc-retry] A missing finish_reason alone is not
+                // actionable — plenty of relays close the socket right after a
+                // legitimate terminal event. The RETRYABLE shape is narrower:
+                // the stream died WHILE tool-args were still streaming, so the
+                // args JSON is syntactically incomplete. Detect it here, at
+                // the producer, because this is the only place that still has
+                // the raw per-tool arg StringBuilders — by the time
+                // ToolCallComplete reaches the agent loop, parseToolArgs has
+                // already flattened the failure into an empty JSONObject and
+                // the truncation is indistinguishable from "model sent {}".
+                val truncatedIds = mutableListOf<String>()
+                var truncatedChars = 0
+                for ((_, acc) in toolCallAccumulators) {
+                    if (acc.id.isEmpty() && acc.args.isEmpty()) continue
+                    val raw = acc.args.toString()
+                    // Cheap shape test: does it parse standalone? Skip when
+                    // empty (nothing was streamed yet — that's the "no tool
+                    // call at all" case, handled by the empty-turn path).
+                    if (raw.isNotEmpty() && !isCompleteJsonObject(raw)) {
+                        truncatedIds += acc.id.ifEmpty { "index-unknown" }
+                        truncatedChars += raw.length
+                    }
+                }
+                if (truncatedIds.isNotEmpty()) {
+                    com.miniseuleros.app.logging.AppLogger.warning(
+                        "OpenAIProvider",
+                        "[T-sse-trunc-retry] tool-args truncated at stream end " +
+                            "(no finish_reason): tools=${truncatedIds.size} argsChars=$truncatedChars " +
+                            "— signalling the agent loop to re-issue this request",
+                    )
+                    send(
+                        LLMStreamChunk.StreamTruncated(
+                            truncatedToolIds = truncatedIds,
+                            truncatedArgsLen = truncatedChars,
+                            hasFinishReason = false,
+                        )
+                    )
+                }
             } else {
                 com.miniseuleros.app.logging.AppLogger.info(
                     "OpenAIProvider",
@@ -1497,11 +1632,30 @@ class OpenAIProvider private constructor(
                 "[T321] stream parse exception: ${e.javaClass.simpleName}: ${e.message} @ $frames " +
                     "(events=$sseEventCount contentLen=$contentLen reasoningLen=$reasoningLen)"
             )
-            cancel("Stream error", mapError(e))
+            // [T-sse-read-idle-watchdog] The watchdog cancelled the call, so
+            // readLine() threw an IOException ("Socket closed"/"Canceled")
+            // rather than returning EOF. Reclassify as TransientError so the
+            // agent loop retries on the SAME provider with the partial-block
+            // rollback, instead of surfacing a raw network error the user
+            // cannot act on. Checked BEFORE mapError, which would otherwise
+            // classify any IOException as NetworkError.
+            if (readIdleTimedOut.get()) {
+                cancel(
+                    "Stream stalled",
+                    LLMError.TransientError(
+                        "upstream stopped sending data for ${STREAM_READ_IDLE_TIMEOUT_MS / 1000}s mid-stream " +
+                            "— retrying on the same model",
+                    ),
+                )
+            } else {
+                cancel("Stream error", mapError(e))
+            }
         } finally {
+            readIdleWatchdog.cancel()
             reader.close()
             response.close()
         }
+        forceCancelHandle?.dispose()
         channel.close()
         // T171: when the coroutine is cancelled (user tapped stop), the
         // reader loop above is suspended inside the OkHttp source — only
@@ -3709,5 +3863,59 @@ private class OkHttpNetTraceListener : EventListener() {
             tag,
             "[${callTag(call)}] +${ms()}ms canceled"
         )
+    }
+}
+
+// [T-android-dispatch-args-repair] Tool-call arguments that fail JSONObject
+// parsing used to vanish into a silent empty-args fallback, which surfaced
+// downstream as a misleading "'plan' 与非空 'subtasks' 必填" error with valid
+// model output. Now: log the raw fragment (bounded) for diagnosis, and retry
+// once after stripping markdown code fences some gateways wrap around args.
+private fun parseToolArgs(raw: String): JSONObject {
+    val trimmed = raw.trim()
+    val candidate = if (trimmed.startsWith("```")) {
+        trimmed.removePrefix("```json").removePrefix("```JSON").removePrefix("```")
+            .removeSuffix("```").trim()
+    } else trimmed
+    try {
+        return JSONObject(candidate)
+    } catch (e: Exception) {
+        com.miniseuleros.app.logging.AppLogger.warning(
+            "OpenAIProvider",
+            "[T-dispatch-args] tool args JSON parse failed len=${raw.length} " +
+                "err=${e.message} head=${raw.take(160)} tail=${raw.takeLast(80)}"
+        )
+        return JSONObject()
+    }
+}
+
+/**
+ * [T-sse-trunc-retry] Does [raw] parse as a standalone, complete JSON object?
+ *
+ * Used at stream end to decide whether a tool call's accumulated arguments
+ * were truncated mid-flight. Deliberately a plain [JSONObject] parse with no
+ * repair: ToolJsonRepair's auto-closing strategies are for the CONSUMER side
+ * (salvaging a recoverable payload), whereas this is a DETECTION probe — a
+ * value that only parses after repair is still, for our purposes, a stream
+ * that died mid-args, and is exactly what we want to re-issue.
+ *
+ * Markdown-fenced payloads (```json … ```) are tolerated because
+ * [parseToolArgs] accepts them; a model that wraps its args in a fence would
+ * otherwise be misreported as truncated on every single turn.
+ *
+ * `internal` rather than private purely so the truncation-detection unit test
+ * can exercise it directly; nothing outside this module calls it.
+ */
+internal fun isCompleteJsonObject(raw: String): Boolean {
+    val trimmed = raw.trim()
+    val candidate = if (trimmed.startsWith("```")) {
+        trimmed.removePrefix("```json").removePrefix("```JSON").removePrefix("```")
+            .removeSuffix("```").trim()
+    } else trimmed
+    return try {
+        JSONObject(candidate)
+        true
+    } catch (_: Exception) {
+        false
     }
 }

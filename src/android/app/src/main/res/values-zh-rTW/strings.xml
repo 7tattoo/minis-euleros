@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MinisEulerOS</string>
+    <string name="app_name">Minis</string>
     <string name="new_chat">新增對話</string>
     <string name="settings">設定</string>
     <string name="providers">供應商</string>
@@ -1207,6 +1207,9 @@
         <item quantity="other">將刪除本則訊息及其之後的全部內容，共 %d 則訊息。此操作無法復原。</item>
     </plurals>
     <string name="chat_edit_exit_button">退出編輯</string>
+    <string name="chat_chip_collab">協作</string>
+    <string name="model_groups_sub_agent">子代理（多模型協同）</string>
+    <string name="model_groups_sub_agent_hint">分組即子代理模型池：先在本頁底部「+ 新增分組」建組並加入成員模型，再回到這裡綁定。派發時子任務按順序輪流使用組內可用模型，其餘成員作回退。</string>
     <string name="chat_show_sidebar">顯示工作階段清單</string>
     <string name="chat_hide_sidebar">隱藏工作階段清單</string>
     <string name="chat_clear_dialog_body">刪除此會話的所有訊息？工作區檔案、附件和卸載內容會保留。</string>

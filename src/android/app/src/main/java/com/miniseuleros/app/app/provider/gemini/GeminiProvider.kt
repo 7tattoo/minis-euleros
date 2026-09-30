@@ -16,6 +16,7 @@ import com.miniseuleros.app.data.model.ThinkingLevel
 import com.miniseuleros.app.provider.LLMProvider
 import com.miniseuleros.app.provider.safeOptString
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -96,6 +97,12 @@ class GeminiProvider(
         messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel,
     ).failOnSilentEmptyCompletion(name)
 
+    // @OptIn(InternalCoroutinesApi): invokeOnCompletion(onCancelling = true)
+    // is the only hook that fires DURING cancellation initiation (public
+    // onCancelling=false fires only at final state, which a coroutine blocked
+    // in a socket read never reaches). The 3-arg overload has been
+    // byte-stable since 1.0 (the public overload delegates to it).
+    @OptIn(kotlinx.coroutines.InternalCoroutinesApi::class)
     private fun rawStreamMessage(
         messages: List<LLMMessage>,
         systemPrompt: String?,
@@ -115,7 +122,20 @@ class GeminiProvider(
             .applyUserAgentOverride(null)
             .build()
 
-        val response = client.newCall(request).execute()
+        val call = client.newCall(request)
+        // [T-android-stream-force-cancel] A consumer-side cancel (user stop,
+        // thinking-watchdog throw, compact withTimeout, model fallback) marks
+        // this producer job cancelled while the body below is parked in
+        // OkHttp's blocking read — cancellation is unobservable there, so the
+        // parked read (and ChannelFlow.collect's wait on this child) lasts
+        // until the 600s readTimeout. This hook fires synchronously AT
+        // cancellation initiation and call.cancel() unblocks the socket
+        // immediately. Normal completion disposes the handle before
+        // channel.close below. Full analysis: OpenAIProvider rawStreamMessage.
+        val forceCancelHandle = coroutineContext[Job]?.invokeOnCompletion(
+            onCancelling = true,
+        ) { runCatching { call.cancel() } }
+        val response = call.execute()
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
             response.close()
@@ -174,6 +194,7 @@ class GeminiProvider(
             reader.close()
             response.close()
         }
+        forceCancelHandle?.dispose()
         channel.close()
         awaitClose()
     }

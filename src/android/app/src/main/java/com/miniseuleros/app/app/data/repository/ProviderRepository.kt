@@ -826,6 +826,9 @@ class ProviderRepository(private val context: Context) {
             config.modelGroups.removeAll { it.id in emptyGroupIds }
             if (config.defaultPrimaryGroupId in emptyGroupIds) config.defaultPrimaryGroupId = null
             if (config.defaultSubGroupId in emptyGroupIds) config.defaultSubGroupId = null
+            // [T-android-compact-summary-model] Same dangling-pointer cleanup
+            // as the other group bindings.
+            if (config.compactSummaryGroupId in emptyGroupIds) config.compactSummaryGroupId = null
         }
 
         saveConfig(config)
@@ -1067,6 +1070,52 @@ class ProviderRepository(private val context: Context) {
     }
 
     /**
+     * [T-android-compact-summary-model] The dedicated compaction-summary entry:
+     * the first enabled member of the configured `compactSummaryGroupId` group.
+     * Returns null when no summary group is configured or every member sits
+     * behind a disabled provider (caller falls back to the active chat model).
+     * Mirrors resolveTitleSubEntry — the credential-aware filter keeps a
+     * keyless member from taking the summary request.
+     */
+    fun resolveCompactSummaryEntry(): ModelEntry? {
+        val summaryGroupId = compactSummaryGroupId ?: return null
+        val group = group(summaryGroupId) ?: return null
+        return availableMemberEntries(group).firstOrNull()
+    }
+
+    /**
+     * [T-android-subagent-orchestration] Sub-agent resolution for
+     * dispatch_subtasks. [groupIdOverride] (per-task `group_id` from the
+     * planner) wins; otherwise the configured subAgentGroupId binding.
+     * null → no usable group (caller reports REJECTED with a settings hint).
+     * Also used to decide whether the tool is exposed at all.
+     */
+    fun resolveSubAgentEntry(
+        groupIdOverride: String? = null,
+        poolIndex: Int = 0,
+    ): ModelEntry? {
+        // [T-android-subagent-pool] The bound group is a POOL: subtask i
+        // resolves to available member (i % size) so a multi-model group
+        // genuinely spreads work; remaining members are fallback for
+        // unavailable providers (filter happens in availableMemberEntries).
+        val gid = groupIdOverride?.ifBlank { null } ?: subAgentGroupId ?: return null
+        val grp = group(gid) ?: return null
+        val members = availableMemberEntries(grp)
+        if (members.isEmpty()) return null
+        val idx = ((poolIndex % members.size) + members.size) % members.size
+        return members[idx]
+    }
+
+    /** True when any dispatch_subtasks dispatch could resolve a model:
+     *  a default binding exists OR at least one group exists (the planner
+     *  may name any group per-task). Drives the tool-schema gate. */
+    fun subAgentsAvailable(): Boolean = synchronized(configLock) {
+        ensureConfigLoaded()
+        val config = _config.value
+        config.subAgentGroupId != null || config.modelGroups.isNotEmpty()
+    }
+
+    /**
      * [T-disabled-provider-via-group-android] True when [entryId] resolves
      * to an entry whose provider instance is currently enabled. Used by the
      * settings UI to dim members that won't be reachable at runtime.
@@ -1280,6 +1329,15 @@ class ProviderRepository(private val context: Context) {
         }
         if (config.defaultSubGroupId == groupId) {
             config.defaultSubGroupId = null
+        }
+        // [T-android-compact-summary-model] Same dangling-pointer cleanup as
+        // defaultSubGroupId above.
+        if (config.compactSummaryGroupId == groupId) {
+            config.compactSummaryGroupId = null
+        }
+        // [T-android-subagent-orchestration] Same dangling-pointer cleanup.
+        if (config.subAgentGroupId == groupId) {
+            config.subAgentGroupId = null
         }
         if (config.voiceInputGroupId == groupId) {
             config.voiceInputGroupId = null
@@ -1533,6 +1591,29 @@ class ProviderRepository(private val context: Context) {
         set(value) = synchronized(configLock) {
             val config = workingCopy()
             config.defaultSubGroupId = value
+            saveConfig(config)
+        }
+
+    // [T-android-compact-summary-model] Compaction summary group binding —
+    // mirrors defaultSubGroupId. Null → compaction runs on the active chat
+    // model (pre-feature behavior).
+    var compactSummaryGroupId: String?
+        get() = _config.value.compactSummaryGroupId
+        set(value) = synchronized(configLock) {
+            ensureConfigLoaded()
+            val config = workingCopy()
+            config.compactSummaryGroupId = value
+            saveConfig(config)
+        }
+
+    // --- Sub-agent group [T-android-subagent-orchestration] ---
+
+    var subAgentGroupId: String?
+        get() = _config.value.subAgentGroupId
+        set(value) = synchronized(configLock) {
+            ensureConfigLoaded()
+            val config = workingCopy()
+            config.subAgentGroupId = value
             saveConfig(config)
         }
 

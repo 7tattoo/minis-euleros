@@ -45,12 +45,16 @@ import com.miniseuleros.app.data.repository.ProviderRepository
 import com.miniseuleros.app.provider.ImageBudget
 import com.miniseuleros.app.provider.LLMProvider
 import com.miniseuleros.app.provider.ProviderFactory
+import com.miniseuleros.app.agent.orchestrator.SubAgentOrchestrator
+import com.miniseuleros.app.agent.orchestrator.SubAgentRunner
+import com.miniseuleros.app.agent.orchestrator.SubTaskSpec
 import com.miniseuleros.app.provider.catalogMaxThinkingLevel
 import com.miniseuleros.app.provider.effectiveMaxThinkingLevel
 import com.miniseuleros.app.agent.shell.BashismDetector
 import com.miniseuleros.app.agent.shell.BashismReminder
 import com.miniseuleros.app.agent.shell.OnDemandBash
 import com.miniseuleros.app.sandbox.ExecutionCoordinator
+import com.miniseuleros.app.sandbox.UbuntuSandbox
 import com.miniseuleros.app.terminal.MinisOpenUrlBroker
 import com.miniseuleros.app.terminal.MinisUrlMarker
 import com.miniseuleros.app.tools.AgentTools
@@ -78,16 +82,182 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
 // [T-android-split-chat] StreamingDelta / ChatMessage / QueuedPrompt /
 // ToolBlockStatus / SlashCommand / AssistantBlock moved verbatim to ChatModels.kt.
+
+/**
+ * [T-android-thinking-watchdog] Thrown from the stream collector when the
+ * PRE-CONTENT thinking phase outlives its wall-clock budget
+ * (ThinkingWatchdogPrefs.limitSeconds). Caught by the stream loop's catch,
+ * which rolls back the partial blocks and retries ONCE with thinking OFF —
+ * the answer arrives before the server's own duration limit can cut the
+ * SSE connection mid-runaway-thinking.
+ */
+class ThinkingOverrunException(val elapsedMs: Long, val thinkingChars: Int) :
+    IllegalStateException("thinking phase overran its budget: ${elapsedMs}ms, $thinkingChars chars")
+
+/**
+ * [T-android-thinking-loop-breaker] Thrown from the stream collector when the
+ * pre-content thinking stream degenerates into a LOOP — either a chunk of
+ * text repeating endlessly (same segment ≥10 consecutive times) or a symbol
+ * barrage (the same single char ≥15 in a row, e.g. "!!!!!!…"). Distinct from
+ * [ThinkingOverrunException] (wall-clock budget): this is a CONTENT check, it
+ * fires fast (seconds, not minutes) and must not burn the thinking-OFF retry
+ * — a loop is per-model pathology, so the catch switches to the next group
+ * member directly. Single-model sessions land in setInlineError, where the
+ * existing InlineErrorBanner already renders an actionable 重试 pill.
+ */
+class ThinkingLoopException(val sample: String) :
+    IllegalStateException("thinking loop detected: ${sample.take(40)}")
+
+/**
+ * 软触发：检测器发现疑似重复但还没达到"终止"阈值。调用方应把提示注入下一轮
+ * prompt，而不是中断流。2026-09-30 调优：单次触发不再直接抛 [ThinkingLoopException]，
+ * 只发此 hint；连续第三次才抛真正异常。这样中文标点停顿之类的合法输出至多损失
+ * 一个提示，绝不会丢整轮。
+ */
+internal class ThinkingLoopHint(val sample: String) :
+    IllegalStateException("thinking loop hint: ${sample.take(40)}")
+
+/**
+ * [T-android-thinking-loop-breaker] Content-level loop detector over the
+ * growing pre-content thinking buffer. Feed it after every delta; it throws
+ * [ThinkingLoopException] the moment the stream has degraded.
+ *
+ * Detection (fixed thresholds per product spec — NOT configurable):
+ *  - SEGMENT: the trailing run of chars contains a segment (3..120 chars)
+ *    that repeats back-to-back ≥10 times (e.g. "但是不对但是不对但是不对…",
+ *    "let me think. let me think. …"), OR the buffer ends with ≥10 copies of
+ *    a 1-2 char segment.
+ *  - SYMBOL: the buffer ends with ≥15 repetitions of the SAME single char
+ *    when that char is a symbol (CJK/letter/digit excluded — a string of
+ *    "？" is punctuation; "aaaaaaaaaaaaaaa" letters are the SEGMENT rule).
+ */
+internal class ThinkingLoopDetector {
+    private val sb = StringBuilder()
+
+    fun feed(text: String) {
+        sb.append(text)
+        // Gate = the SMALLEST possible trigger across both rules: a 10-copy
+        // single-Han/letter run is only 10 chars (e.g. "好"×10 with a 3-char
+        // prefix = 13 < 15 would never reach the check if gated at 15 — the
+        // field bug the han-char test caught). The symbol rule has its own
+        // run threshold inside.
+        if (sb.length < 10) return
+        val s = sb
+        val last = s[s.length - 1]
+
+        // SYMBOL rule: identical trailing CODE POINTS that are not letter/digit/Han.
+        // Counted over code points (not Chars) so emoji / surrogate pairs work.
+        // CJK punctuation (。！？，、；：… etc.) needs 30 in a row; ASCII
+        // punctuation / emoji stays at 15. A string of fullwidth periods is a
+        // legitimate Chinese pause/ellipsis, NOT a loop — the old 15 threshold
+        // cut real thinking (2026-09-30 note).
+        if (!last.isLetterOrDigit() && !isHan(last)) {
+            val symThreshold = if (isCjkPunct(last)) 30 else 15
+            val lastCp = s.codePointBefore(s.length)
+            var run = 1
+            // Walk backwards one code point at a time; compare each preceding
+            // code point to the trailing one.
+            var idx = s.length
+            while (run < symThreshold) {
+                val cp = s.codePointBefore(idx)
+                val cpLen = Character.charCount(cp)
+                val prevIdx = idx - cpLen
+                if (prevIdx <= 0) break
+                val prevCp = s.codePointBefore(prevIdx)
+                if (prevCp != lastCp) break
+                run++
+                idx = prevIdx
+            }
+            if (run >= symThreshold) {
+                fire(s.substring(maxOf(0, s.length - symThreshold)), "SYMBOL run=$run")
+                return
+            }
+        }
+
+        // SEGMENT rule: check trailing repeats for plausible segment lengths.
+        // CJK punctuation is owned EXCLUSIVELY by the SYMBOL rule above (so a
+        // "。。。" run is judged only by the 30-char SYMBOL threshold, never by
+        // the 10-copy segment rule). All other trailing chars (letters, digits,
+        // Han, ASCII punctuation, spaces, emoji) participate here.
+        // len==1 for letters/digits/Han (aaaaaaaa…, 好…) stays on the 10-threshold.
+        // Short CJK phrases (len 2..4) need ≥20 copies before they count,
+        // because a single re-stated phrase like "但是不对" 10× is normal
+        // reasoning, not a loop. Longer segments / english phrases stay at 10.
+        if (!isCjkPunct(last)) {
+            val maxWindow = minOf(s.length, 120 * 20 + 8)
+            val window = s.subSequence(maxOf(0, s.length - maxWindow), s.length)
+            val minLen = 1
+            for (len in minLen..minOf(120, window.length / 10)) {
+                val seg = window.subSequence(window.length - len, window.length)
+                // Count consecutive back-to-back copies ending at the window end.
+                var copies = 1
+                var pos = window.length - len
+                while (pos - len >= 0 && copies < 20) {
+                    val prev = window.subSequence(pos - len, pos)
+                    if (prev != seg) break
+                    copies++
+                    pos -= len
+                }
+                val copiesNeeded = if (len >= 2 && len <= 4 && isHan(last)) 20 else 10
+                if (copies >= copiesNeeded) {
+                    fire(seg.toString(), "SEGMENT len=$len copies=$copies")
+                    return
+                }
+            }
+        }
+    }
+
+    /**
+     * [T-android-thinking-loop-breaker] Detector ONLY emits a soft
+     * [ThinkingLoopHint] — it never hard-aborts. The caller decides whether a
+     * run of hints constitutes a real loop (after N hints in the same turn it
+     * promotes the hint to a hard [ThinkingLoopException]). This keeps false
+     * positives (punctuation runs, a re-stated phrase) fully recoverable: a
+     * single trigger costs at most one injected steer, never a lost turn.
+     */
+    private fun fire(sample: String, detail: String) {
+        AppLogger.warning(
+            "ChatVMStream",
+            "[T-think-loop] fire rule=$detail sample=${sample.take(24)} totalChars=${sb.length}",
+        )
+        throw ThinkingLoopHint(sample)
+    }
+
+    /** Reset between stream attempts (fresh attempt = fresh buffer). */
+    fun reset() { sb.setLength(0) }
+
+    /** Han / Kana / Hangul ideographs and syllables — NOT CJK punctuation. */
+    private fun isHan(c: Char): Boolean {
+        val b = c.code
+        return b in 0x4E00..0x9FFF || b in 0x3400..0x4DBF ||
+            b in 0x3040..0x30FF || b in 0xAC00..0xD7AF
+    }
+
+    /** Fullwidth CJK punctuation — these are common as legitimate pauses, so
+     *  the SYMBOL rule gives them a higher (30) threshold than ASCII/emoji. */
+    private fun isCjkPunct(c: Char): Boolean {
+        val b = c.code
+        // CJK Symbols and Punctuation (3000–303F), Fullwidth Forms (FF01–FF60),
+        // General CJK punctuation in the 3000 range, plus the ideographic
+        // comma/period that live just below 3000.
+        return (b in 0x3000..0x303F) ||
+            (b in 0xFF01..0xFF60) ||
+            // … (horizontal ellipsis) and a few stray fullwidth marks
+            b == 0x2026 || b == 0x2025
+    }
+}
 
 class ChatViewModel(
     internal val sessionId: String,
@@ -125,21 +295,29 @@ class ChatViewModel(
         internal const val MAX_COMPACT_LLM_CALLS = 6
 
         /** Floor for the dynamic wall-clock timeout. */
-        internal const val COMPACT_TIMEOUT_BASE_MS = 90_000L
+        internal const val COMPACT_TIMEOUT_BASE_MS = 60_000L
 
         /**
          * Added per 10k characters of transcript, so a long first compaction is
          * not cut off by a limit tuned for a short one.
          */
-        internal const val COMPACT_TIMEOUT_PER_10K_CHARS_MS = 30_000L
+        internal const val COMPACT_TIMEOUT_PER_10K_CHARS_MS = 12_000L
 
         /**
          * Hard ceiling. Deliberately under the providers' 10-minute
          * readTimeout: past this point the run is aborted by us — with the lock
          * released and a clear message — rather than sitting on a socket that
          * may never answer.
+         *
+         * [T-compact-degraded-marker] Lowered from 300s. A reasoning-by-default
+         * model that ignores the compact prompt's thinking-off request burns the
+         * whole ceiling on reasoning_content and returns zero summary text —
+         * five minutes of visible "compacting…" with no way out (observed: a
+         * 38k-char reasoning stream, 0 content, killed at 300s). Now the wait
+         * caps at 2.5 minutes, and the degraded marker installed on timeout
+         * means that wait ends in a continued turn instead of a dead one.
          */
-        internal const val COMPACT_TIMEOUT_MAX_MS = 300_000L
+        internal const val COMPACT_TIMEOUT_MAX_MS = 150_000L
 
         /**
          * Wall-clock budget for compacting a transcript of [transcriptChars].
@@ -399,6 +577,11 @@ class ChatViewModel(
         // can be filtered with `adb logcat -s Minis.ChatVMStream:D`.
         // Removed once the retry-state regression is rooted out.
         private const val TAG_STREAM = "ChatVMStream"
+
+        // [T-android-thinking-loop-breaker] 2026-09-30: 软触发策略下的硬中断阈值。
+        // 单次 loop 提示只注入"换措辞推进"到下一轮 prompt（模型自愈）；同一轮内
+        // 累计达到此次数仍重复，才判定为真正死循环并终止该轮。
+        private const val LOOP_HINT_HARD_LIMIT = 3
         /**
          * Hard ceiling on agent loop iterations within a single user turn.
          * Backstop against runaway tool-call cycles that slip past
@@ -410,6 +593,21 @@ class ChatViewModel(
          * Mirrors iOS AIChatViewModel.maxAgentTurns.
          */
         private const val MAX_AGENT_TURNS = 200
+
+        /**
+         * [T-sse-trunc-retry] Max transparent re-issues of a single turn whose
+         * stream died mid tool-args (no finish_reason + unparseable args).
+         *
+         * Separate from the error-path retry budget on purpose: a truncation
+         * retry is invisible to the model (no error text is appended, no turn
+         * slot is spent), so it cannot inflate the model's own retry loop or
+         * the per-turn cost the way a model-visible retry would. 2 is enough to
+         * ride out a transient upstream death; a route that truncates 3 times
+         * in a row is a dead endpoint, and the fallback chain (not another
+         * silent retry) is the right answer there.
+         */
+        private const val MAX_STREAM_TRUNCATION_RETRIES = 2
+
         private const val MIN_MAX_TOKENS = 1024
         /**
          * Hard ceiling on max_tokens we ever send to a provider, regardless
@@ -1226,6 +1424,19 @@ class ChatViewModel(
                 providerRepository, context,
             ),
             memoryEnabled = _memoryEnabled.value,
+            // [T-ubuntu-secondary-sandbox] Expose ubuntu_shell only when the
+            // secondary rootfs is installed (Settings → Ubuntu 沙箱); a
+            // File.exists() check per request is negligible next to schema
+            // serialization.
+            ubuntuShellEnabled = UbuntuSandbox.isInstalled(context),
+            // [T-android-subagent-orchestration] Structural gate: some group
+            // can resolve (default binding OR per-task group_id at dispatch
+            // time). [T-android-subagent-collab-chip] ANDed with the
+            // input-bar chip (user intent) — OFF removes the tool from the
+            // schema AND the orchestration section from the prompt, so the
+            // model never sees guidance for a tool it can't call.
+            subAgentsEnabled = providerRepository.subAgentsAvailable() &&
+                SubAgentCollabPrefs.enabled.value,
         )
 
     /**
@@ -1476,6 +1687,18 @@ class ChatViewModel(
     fun setAutoCompactEnabled(enabled: Boolean) {
         com.miniseuleros.app.data.AutoCompactPrefs.setEnabled(context, enabled)
         _autoCompactEnabled.value = enabled
+    }
+
+    // [T-android-thinking-watchdog] Cap (in seconds) on the pre-content
+    // thinking phase; 0 = disabled. Exposed as a ⚡-menu row — mirrors the
+    // auto-compact toggle's prefs-backed StateFlow pattern.
+    internal val _thinkingWatchdogSeconds =
+        MutableStateFlow(com.miniseuleros.app.data.ThinkingWatchdogPrefs.limitSeconds())
+    val thinkingWatchdogSeconds: StateFlow<Int> = _thinkingWatchdogSeconds.asStateFlow()
+
+    fun setThinkingWatchdogSeconds(seconds: Int) {
+        com.miniseuleros.app.data.ThinkingWatchdogPrefs.setLimitSeconds(context, seconds)
+        _thinkingWatchdogSeconds.value = seconds
     }
 
     /**
@@ -2167,7 +2390,7 @@ class ChatViewModel(
             else if (prev.version >= 2) prevIdx + 1
             else prevIdx
         }
-        if (effectiveStartIdx > anchorIdx) {
+        if (effectiveStartIdx >= anchorIdx) {
             appendSystemInfo("Already compacted up to this point.", "compact")
             return
         }
@@ -2176,15 +2399,34 @@ class ChatViewModel(
             appendSystemInfo("Nothing to compact.", "compact")
             return
         }
-        // Past every precondition — from here the launch below owns the
-        // onFinished callback.
-        markStarted()
-        _isCompacting.value = true
         // [T-android-compact-runaway] Size the wall-clock budget off the actual
         // transcript, so a long first compaction is not cut off by a limit
         // tuned for a short one. Measured on the same truncated transcript the
         // request will carry, not the raw history.
         val transcriptChars = buildConversationTextForSummary(toCompact).length
+        // [T-compact-trivial-range] A stale mid-loop token reading (or a manual
+        // tap) can trigger a compact seconds after a real one finished, leaving
+        // only a couple of fresh entries. Compacting those installs a NESTED
+        // marker — and only the LATEST marker drives graying, so its divider
+        // hides the previous summary entirely (observed on device 2026-09-23
+        // 15:51: two compacts 90ms apart, the second outlining just 2 entries
+        // and erasing the first summary from context). Refuse trivial ranges.
+        // Report as success (true) so an in-loop gate that requested this
+        // proceeds with the turn instead of aborting it.
+        if (toCompact.size <= 3 || transcriptChars < 600) {
+            appendSystemInfo(
+                "Only ${toCompact.size} recent entries ($transcriptChars chars) — " +
+                    "nothing worth compacting; kept verbatim.",
+                "compact",
+            )
+            markStarted()
+            onFinished?.invoke(true)
+            return
+        }
+        // Past every precondition — from here the launch below owns the
+        // onFinished callback.
+        markStarted()
+        _isCompacting.value = true
         val timeoutMs = compactTimeoutMsFor(transcriptChars)
         compactCallsIssued.set(0)
         _compactProgress.value = CompactProgress(
@@ -2218,18 +2460,65 @@ class ChatViewModel(
                 // including every split segment. Without it the only ceiling was
                 // the provider's 10-minute readTimeout multiplied by however
                 // many sequential segments the split produced.
-                val summary = withTimeout(timeoutMs) {
-                    generateCompactSummaryWithSplitting(
-                        messages = toCompact,
-                        previousSummary = existing,
-                        depth = 0,
+                var summary: String = try {
+                    withTimeout(timeoutMs) {
+                        generateCompactSummaryWithSplitting(
+                            messages = toCompact,
+                            previousSummary = existing,
+                            depth = 0,
+                        )
+                    }.trim()
+                } catch (e: TimeoutCancellationException) {
+                    // MUST precede the CancellationException arm — a timeout is a
+                    // recoverable "give up on time" outcome, not a user cancel.
+                    timedOut = true
+                    val calls = compactCallsIssued.get()
+                    Log.w(TAG, "[Compact] timed out after ${timeoutMs / 1000}s ($calls model call(s) issued)")
+                    AppLogger.warning(
+                        TAG,
+                        "[Compact] degraded marker: timed out after ${timeoutMs / 1000}s ($calls model call(s)) " +
+                            "— installing a lossy outline so the turn can continue",
                     )
-                }.trim()
-                if (summary.isEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        appendSystemInfo("Compaction produced no output — try again later.", "compact")
+                    buildDegradedCompactSummary(
+                        messages = toCompact,
+                        reason = "summary call timed out after ${timeoutMs / 1000}s ($calls model call(s))",
+                        previousSummary = existing,
+                    )
+                } catch (e: IllegalStateException) {
+                    // Only the splitter's own call-budget error is recoverable here;
+                    // anything else rethrows into the generic arm below, which keeps
+                    // today's behaviour (notice + no marker) for hard errors.
+                    if (e.message?.contains("exceeded its budget") != null) {
+                        Log.w(TAG, "[Compact] ${e.message}")
+                        AppLogger.warning(
+                            TAG,
+                            "[Compact] degraded marker: ${e.message} — installing a lossy outline " +
+                                "so the turn can continue",
+                        )
+                        buildDegradedCompactSummary(
+                            messages = toCompact,
+                            reason = "summary budget exhausted (${compactCallsIssued.get()} model call(s))",
+                            previousSummary = existing,
+                        )
+                    } else {
+                        throw e
                     }
-                    return@launch
+                }
+                if (summary.isEmpty()) {
+                    // Empty completion — on a reasoning-by-default relay this is the
+                    // model spending the whole budget on reasoning_content and never
+                    // emitting text. Same recovery as a timeout.
+                    AppLogger.warning(
+                        TAG,
+                        "[Compact] degraded marker: summary model returned no text " +
+                            "(often: the model spent the whole budget reasoning) — " +
+                            "installing a lossy outline so the turn can continue",
+                    )
+                    summary = buildDegradedCompactSummary(
+                        messages = toCompact,
+                        reason = "summary model returned no text",
+                        previousSummary = existing,
+                    )
                 }
 
                 val sid = realSessionId.ifEmpty { sessionId }
@@ -2360,13 +2649,40 @@ class ChatViewModel(
                     }
                     _messages.value = cleaned
                     AppLogger.info(TAG, "[Compact] divider: $compactedUICount UI bubbles compacted (history entries: ${toCompact.size})")
+                    // [T-compact-degraded-marker] A degraded (lossy-outline) marker
+                    // says so in the divider itself — otherwise the user would read
+                    // "N messages compacted" and assume a real summary sits behind
+                    // the info icon.
+                    val dividerText = if (summary.startsWith(DEGRADED_SUMMARY_PREFIX)) {
+                        "$compactedUICount messages compacted (summary unavailable — outline only)"
+                    } else {
+                        "$compactedUICount messages compacted"
+                    }
                     appendSystemInfo(
-                        text = "$compactedUICount messages compacted",
+                        text = dividerText,
                         iconKind = "compact",
                         payload = summary,
                     )
                 }
+                if (summary.startsWith(DEGRADED_SUMMARY_PREFIX)) {
+                    AppLogger.warning(
+                        TAG,
+                        "[Compact] marker installed in DEGRADED form: ${toCompact.size} message(s) " +
+                            "outlined locally, no model summary. Turn continues. " +
+                            "Revert the most recent compact to restore the original history.",
+                    )
+                }
                 compactSucceeded = true
+                // [T-android-auto-compact-stale-token] Pre-send compacts never
+                // run the mid-loop gate's `_lastTurnContextTokens.value = 0`
+                // invalidation — that line only lives in the gate itself. So
+                // after THIS compact finishes, the gate's next read still sees
+                // the PRE-compact usage number and immediately re-compacts
+                // (observed on device 2026-09-23 15:51:02: second compact fired
+                // 90ms after the first, outlining just 2 entries). Zero it so
+                // the gate falls back to the local estimate over the freshly
+                // compacted history.
+                _lastTurnContextTokens.value = 0
             } catch (e: TimeoutCancellationException) {
                 // [T-android-compact-runaway] MUST precede the CancellationException
                 // arm — TimeoutCancellationException extends it, so the generic
@@ -2433,6 +2749,179 @@ class ChatViewModel(
                 resumeQueueAfterCancel()
             }
         }
+    }
+
+    /** Marker prefix that identifies a degraded (locally-built) summary. */
+    private val DEGRADED_SUMMARY_PREFIX = "[CONTEXT OUTLINE — LOSSY]"
+
+    /** Hard cap for a degraded outline. */
+    private val DEGRADED_SUMMARY_BUDGET_CHARS = 12_000
+
+    /** Per-message budget for a degraded outline. */
+    private val DEGRADED_PER_MESSAGE_CHARS = 900
+
+    /**
+     * [T-compact-degraded-marker] Build a lossy, deterministic outline of
+     * [messages] for the emergency marker path in [compactAll].
+     *
+     * No model call is made, so this is always available: when the summary
+     * model times out, exhausts its call budget, spends the whole budget on
+     * reasoning_content, or returns an empty completion, we still install a
+     * marker so the turn can keep going. Before this existed the failure arms
+     * only appended a "compaction failed" notice and returned false, which made
+     * [inLoopContextCheck] stop the turn with "Context is full and could not be
+     * reduced further" — and switching models did not help, because every model
+     * went through the same compact call against the same oversized history.
+     *
+     * Detail is deliberately dropped (that is the stated trade, and it is
+     * written into both the marker body and the chat divider). The user can
+     * undo it: "Revert the most recent compact" deletes the marker and restores
+     * the full history, because the DB rows are never rewritten.
+     */
+    private fun buildDegradedCompactSummary(
+        messages: List<LLMMessage>,
+        reason: String,
+        previousSummary: String? = null,
+    ): String {
+        // [T-compact-degraded-tail] Tail-biased outline. The original loop
+        // walked from the head and stopped when the budget filled: with a few
+        // hundred entries the ENTIRE tail — the most recent tool results, i.e.
+        // the actual task progress — was dropped, and the model resumed the
+        // task from its opening state (user report 2026-09-23: after an
+        // in-loop compact timed out into this path, a switched-in model
+        // "identified the pre-compaction state" and could not continue). The
+        // outline now keeps a head window (task setup) plus a tail window
+        // (current progress); the middle is explicitly marked omitted. Tool
+        // results in the TAIL carry a real content excerpt — that is the live
+        // state a model needs to continue; head results stay size-only.
+        val sb = StringBuilder(DEGRADED_SUMMARY_PREFIX + " " + reason + ". ")
+        sb.append("The summary model did not finish, so this is a mechanical outline: ")
+        sb.append("the opening messages and the most recent tail are kept, the middle ")
+        sb.append("is omitted. Tail tool results include a content excerpt — that is ")
+        sb.append("the CURRENT task state and where the work actually stopped. The full ")
+        sb.append("messages are still in the database — revert the most recent compact ")
+        sb.append("to restore them verbatim.\n")
+
+        // [T-compact-degraded-carry] The normal summary path folds
+        // `previousSummary` into the new model summary
+        // (generateCompactSummaryWithSplitting receives it); the degraded path
+        // must carry it too. Otherwise a chained compact hides the previous
+        // summary behind the newest divider WITHOUT carrying its content —
+        // user report 2026-09-23: "two compacts erased all progress". Keep the
+        // TAIL of the previous summary: its closing "done so far / where work
+        // stopped" section is the resume-critical part.
+        if (!previousSummary.isNullOrBlank()) {
+            sb.append("=== PREVIOUS COMPACT SUMMARY (carried forward — facts below remain authoritative) ===\n")
+            sb.append(previousSummary.trim().takeLast(4000)).append("\n")
+            sb.append("=== NEW ENTRIES SINCE THAT SUMMARY ===\n")
+        }
+
+        val headBudget = ((DEGRADED_SUMMARY_BUDGET_CHARS - sb.length).coerceAtLeast(2000)) * 4 / 10
+        val tailBudget = ((DEGRADED_SUMMARY_BUDGET_CHARS - sb.length).coerceAtLeast(2000)) * 55 / 100
+
+        // One message → one outline line. tailDetail=true swaps tool-result
+        // sizes for short content excerpts and tightens text caps so more of
+        // the recent history fits into the tail window.
+        fun pieceFor(msg: LLMMessage, tailDetail: Boolean): String? {
+            val textCap = if (tailDetail) 420 else DEGRADED_PER_MESSAGE_CHARS
+            val resultCap = if (tailDetail) 240 else 0
+            val pieces = StringBuilder()
+            for (part in msg.contentParts) {
+                when (part) {
+                    is AgentContentPart.Text -> {
+                        val t = part.text.trim()
+                        if (t.isEmpty()) continue
+                        pieces.append(
+                            if (t.length > textCap) t.take(textCap) + " …[cut]" else t,
+                        )
+                    }
+                    is AgentContentPart.ToolUse -> {
+                        pieces.append("tool_call ").append(part.name).append(" ")
+                        val keys = part.input.keys().asSequence().joinToString(", ")
+                        pieces.append("{args: ").append(keys).append("}")
+                    }
+                    is AgentContentPart.ToolResult -> {
+                        pieces.append("tool_result ")
+                            .append(part.name)
+                            .append(if (part.isError) " [error]" else " [ok]")
+                        if (resultCap > 0) {
+                            val c = part.content.trim().replace('\n', ' ')
+                            pieces.append(" | ").append(
+                                if (c.length > resultCap) c.take(resultCap) + " …[cut]" else c,
+                            )
+                        } else {
+                            pieces.append(" (")
+                                .append(part.content.length)
+                                .append(" chars dropped)")
+                        }
+                    }
+                    is AgentContentPart.ImageData -> {
+                        pieces.append("image ").append(part.mimeType)
+                            .append(" (").append(part.data.size)
+                            .append(" bytes dropped)")
+                    }
+                }
+            }
+            if (pieces.isEmpty() && msg.content.isNotBlank()) {
+                val t = msg.content
+                pieces.append(if (t.length > textCap) t.take(textCap) + " …[cut]" else t)
+            }
+            if (pieces.isEmpty()) return null
+            return pieces.toString().replace('\n', ' ').trim()
+        }
+
+        fun emitEntry(idx: Int, line: String) {
+            // Numbering uses the REAL message position (1-based) so the gap
+            // between head and tail windows is visible in the entry numbers.
+            sb.append(idx + 1).append(". [").append(messages[idx].role.value).append("] ")
+                .append(line).append("\n")
+        }
+
+        // Head window: chronological from the start (task setup).
+        val headCap = sb.length + headBudget
+        var headEndIdx = -1
+        for (i in messages.indices) {
+            val line = pieceFor(messages[i], tailDetail = false) ?: continue
+            val cost = line.length + 24
+            if (sb.length + cost > headCap) break
+            emitEntry(i, line)
+            headEndIdx = i
+        }
+
+        // Tail window: walk backwards so the NEWEST entries always win the
+        // budget, then emit in chronological order (progress reads naturally).
+        val tailLines = ArrayList<Pair<Int, String>>()
+        var tailUsed = 0
+        var i = messages.lastIndex
+        while (i > headEndIdx) {
+            val line = pieceFor(messages[i], tailDetail = true)
+            if (line == null) {
+                i--
+                continue
+            }
+            val cost = line.length + 24
+            if (tailUsed + cost > tailBudget) break
+            tailUsed += cost
+            tailLines.add(i to line)
+            i--
+        }
+        tailLines.reverse()
+        val tailStartIdx = tailLines.firstOrNull()?.first ?: messages.size
+
+        val middleCount = if (tailStartIdx > headEndIdx + 1) tailStartIdx - headEndIdx - 1 else 0
+        if (middleCount > 0) {
+            sb.append("… [").append(headEndIdx + 2).append("..").append(tailStartIdx)
+                .append("] ").append(middleCount)
+                .append(" messages in between OMITTED (their content lives only in the DB; ")
+                .append("revert the compact to read them)…\n")
+        }
+        for ((idx, line) in tailLines) emitEntry(idx, line)
+
+        if (headEndIdx < 0 && tailLines.isEmpty()) {
+            sb.append("(outline budget too small for any entry; ")
+                .append(messages.size).append(" messages exist in the DB)\n")
+        }
+        return sb.toString().take(DEGRADED_SUMMARY_BUDGET_CHARS)
     }
 
     /**
@@ -3228,11 +3717,21 @@ class ChatViewModel(
                     "was done\", NOT as an ongoing goal or todo list."
             )
         }
-        val model = currentModel
+        // [T-android-compact-summary-model] Prefer the dedicated compaction
+        // summary model (模型组 → 压缩摘要). The active chat model may be a
+        // reasoning-only model that never emits summary text — the 1.13.1/
+        // 1.13.2 degraded-outline failures — so the user can pin a cheap,
+        // ordinary chat model for summaries. Unset/unavailable → the active
+        // chat model (pre-feature behavior).
+        val summaryOverride = resolveCompactSummaryProvider()
+        if (summaryOverride != null) {
+            AppLogger.info(TAG, "[Compact] summary model override: ${summaryOverride.second.displayName}")
+        }
+        val model = summaryOverride?.second ?: currentModel
         val contextWindow = model?.contextWindow ?: 128_000
         val estimatedInput = userMessage.length / 4
         val maxOut = maxOf(1024, minOf(8192, contextWindow - estimatedInput))
-        val provider = currentProvider
+        val provider = (summaryOverride?.first ?: currentProvider)
             ?: throw IllegalStateException("No LLM provider available for compaction")
         val response = provider.sendMessage(
             messages = listOf(
@@ -3573,6 +4072,14 @@ class ChatViewModel(
     private val compactSummarySystemPrompt: String = """
         You are a context compaction engine. Your summary will REPLACE the original messages in the conversation context window. The agent will read your summary as past context, then proceed based on the user's NEXT message — your summary is background, not a standing work order. Write the summary in the same language the user used in the conversation.
 
+        ABSOLUTE RULE — WORK SURVIVES COMPACTION [T-android-subagent-handoff]:
+        The conversation may be compacted, but the WORK must never be lost. If any multi-model collaboration (协作/派发子任务/dispatch) happened in this conversation, you MUST copy these into the summary VERBATIM (never paraphrase, never shorten, never drop):
+        - Every file path the collaboration produced or referenced (工具块 FILES 行 / 协作交接账本路径 / ORCHESTRATION JOURNAL 路径)
+        - The collaboration ledger path (e.g. /var/minis-euleros/workspace/.collab/HANDOFF.md) — the reader must be told to read it before continuing any related work
+        - Each subtask's outcome: taskId → model → DONE/BLOCKED/FAILED → its summary and file paths
+        - Which subtasks are unfinished and the exact observable next step for each
+        A summary that loses collaboration outputs wastes ALL the compute already spent. When in doubt, include the file path.
+
         MUST PRESERVE (never omit or shorten):
         - All file paths, directory names, URLs, UUIDs, and identifiers — copy verbatim
         - Commands executed and their outcomes (success/failure/output)
@@ -3581,11 +4088,13 @@ class ChatViewModel(
         - Errors encountered and how they were resolved
         - Important constraints, rules, or user preferences mentioned
         - Any tool calls and their results that affect current state
+        - The exact point where multi-step work stopped: the LAST step attempted and its outcome
 
         STRUCTURE:
         1. Start with a one-line description of what the conversation was about (use past tense — "User asked X, agent did Y", NOT "Goal: X").
         2. Then a concise narrative of what happened, preserving technical details.
-        3. End with a "What had been done so far" section listing completed work — NOT a "todo" or "pending" list. Do not invent ongoing objectives or carry-over tasks from old turns; if the user wants to continue, they will say so in their next message.
+        3. Then, IF collaboration happened, a "协作交接 / COLLAB HANDOFF" section with: ledger path, per-subtask outcomes (taskId/model/status/summary/files), unfinished work with exact next steps, and produced-artifact paths — copied verbatim from the tool blocks.
+        4. End with a "What had been done so far" section listing completed work — NOT a "todo" or "pending" list. Do not invent ongoing objectives or carry-over tasks from old turns; if the user wants to continue, they will say so in their next message. Exception: if a task was genuinely mid-execution when compaction happened, record factually where it stopped (last attempted step, its result) so it can be resumed at the correct point instead of restarted — state the observable next step without inventing new objectives.
 
         PRIORITIZE recent context over older history — recent decisions and recent file/path references are most useful for continuity.
 
@@ -3622,7 +4131,33 @@ class ChatViewModel(
     /** The real session ID (same as sessionId for existing sessions, generated on first message for drafts). */
     internal var realSessionId: String = if (isDraft) "" else sessionId
 
+    // ── [T-android-subagent-collab-chip] Coomi-style input-bar mode chip ──
+    //
+    // dispatch_subtasks exposure is now TWO-gated:
+    //   structural — a sub-agent group can resolve (a default binding or any
+    //                group the planner may name; ProviderRepository
+    //                .subAgentsAvailable), AND
+    //   intent     — the persisted chip flag (SubAgentCollabPrefs).
+    // `subAgentCollabAvailable` mirrors the structural gate reactively so the
+    // chip appears/disappears live when the user binds or deletes a group in
+    // Settings and returns; the chip itself only renders when it is true, so
+    // the toggle can never dead-end. When the intent gate is OFF the tool
+    // drops from the schema AND the orchestration section drops from
+    // buildSystemPrompt (one shared collabOn read in each builder).
+    val subAgentCollabEnabled: StateFlow<Boolean> get() = SubAgentCollabPrefs.enabled
+
+    val subAgentCollabAvailable: StateFlow<Boolean> = providerRepository.config
+        .map { config -> config.subAgentGroupId != null || config.modelGroups.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, providerRepository.subAgentsAvailable())
+
+    /** Chip tap handler: flip + persist (SharedPreferences, apply). */
+    fun setSubAgentCollabEnabled(enabled: Boolean) = SubAgentCollabPrefs.set(context, enabled)
+
     init {
+        // [T-android-subagent-collab-chip] Load the persisted chip flag once
+        // per process so the first frame (and the first prompt build) reads
+        // the real state instead of the default-OFF placeholder.
+        SubAgentCollabPrefs.init(context)
         loadSession()
         // [T-session-paused-badge-active-false-positive] Drive the session-list
         // PAUSED badge directly off canResume — the authoritative "this session
@@ -4500,19 +5035,26 @@ class ChatViewModel(
                             "→ uiIdx=$healUiIdx insertIdx=$insertIdx",
                     )
                 } else {
-                    // Even createdAt heal failed. Place divider at top
-                    // with NO graying — this is iOS's "insertIdx=0, no
-                    // gray" branch (Persistence.swift:350-351). The
-                    // pre-T-compact-v2 behaviour of "cutoff = lastIndex,
-                    // gray everything" produced the user-reported bug:
-                    // every new message also fell within [0..cutoff]
-                    // and was repeatedly grayed on each reload.
-                    insertIdx = 0
+                    // Even createdAt heal failed — the marker's anchor is gone
+                    // (chained compactions can compact the anchor away) and
+                    // neither lcmId nor createdAt can re-locate it. The old
+                    // fallback ("divider at top, no graying" = everything
+                    // active) turned the session into a CONTEXT BOMB: the full
+                    // history ships to the API every turn, the auto-compact
+                    // gate fires forever (109K/128K observed), and each pass
+                    // installs another junk marker on a 4-entry tail.
+                    // DROP the orphaned marker instead: the session loads
+                    // uncompacted, and the gate's next (legitimate) compact
+                    // builds a fresh marker with a resolvable anchor. Losing
+                    // the stale summary is acceptable — it gets re-summarized
+                    // with the full history.
                     AppLogger.warning(
-                        TAG,
-                        "[Compact] Phase2.5 unresolved (heal failed): marker.id=${marker.id.take(8)} " +
-                            "lcmId=${lcmId?.take(8) ?: "nil"} — divider at top, no graying",
+                        "ChatViewModel",
+                        "[Compact] Phase2.5 dropping orphaned marker ${marker.id.take(8)} " +
+                            "(lcmId + createdAt heal both failed) — session uncompacted",
                     )
+                    runCatching { chatRepository.dao.deleteCompactMarker(marker.id) }
+                    return messages
                 }
             }
         } else {
@@ -4539,12 +5081,19 @@ class ChatViewModel(
                             "→ newAnchor=${heal.id.take(8)} → uiIdx=$healUiIdx",
                     )
                 } else {
-                    insertIdx = 0
+                    // [T-compact-orphan-drop] Same as the v2 branch: both
+                    // heal routes failed, so the divider can't be anchored.
+                    // The old "divider at top, no graying" fallback made the
+                    // whole history active every turn (context bomb + endless
+                    // junk compacts). Drop the marker; the auto-compact
+                    // rebuilds a fresh, resolvable one.
                     AppLogger.warning(
                         TAG,
-                        "[Compact] Phase2.5 v1 unresolved (heal failed): firstKeptId=${firstKeptId.take(8)} — " +
-                            "divider at top, no graying",
+                        "[Compact] Phase2.5 v1 dropping orphaned marker ${marker.id.take(8)} " +
+                            "(firstKeptId unresolvable) — session uncompacted",
                     )
+                    runCatching { chatRepository.dao.deleteCompactMarker(marker.id) }
+                    return messages
                 }
             }
         }
@@ -5700,6 +6249,8 @@ class ChatViewModel(
                 } catch (e: CancellationException) {
                     AppLogger.info(TAG_STREAM, "$label runAgentLoop CANCELLED")
                     Log.d(TAG, "Agent loop cancelled")
+                } catch (e: ThinkingLoopException) {
+                    translateLoopError(e)
                 } catch (e: Exception) {
                     AppLogger.error(TAG_STREAM, "$label runAgentLoop EXCEPTION ${e.javaClass.simpleName}: ${e.message}")
                     Log.e(TAG, "Agent loop error ($label)", e)
@@ -6298,6 +6849,9 @@ class ChatViewModel(
                 // and call resumeQueueAfterCancel() if anything's still pending,
                 // so just propagate.
                 throw e
+            } catch (e: ThinkingLoopException) {
+                translateLoopError(e)
+                break
             } catch (e: Exception) {
                 Log.e(TAG, "Agent loop (queued-drain) error", e)
                 setInlineError(e.message ?: "Unknown error")
@@ -6599,6 +7153,8 @@ class ChatViewModel(
                     } catch (e: CancellationException) {
                         AppLogger.info(TAG_STREAM, "send runAgentLoop CANCELLED")
                         Log.d(TAG, "Agent loop cancelled")
+                    } catch (e: ThinkingLoopException) {
+                        translateLoopError(e)
                     } catch (e: Exception) {
                         AppLogger.error(TAG_STREAM, "send runAgentLoop EXCEPTION ${e.javaClass.simpleName}: ${e.message}")
                         Log.e(TAG, "Agent loop error (all fallbacks exhausted)", e)
@@ -6933,6 +7489,10 @@ class ChatViewModel(
                     } catch (e: CancellationException) {
                         AppLogger.info(TAG_STREAM, "retryLast runAgentLoop CANCELLED")
                         Log.d(TAG, "Agent loop cancelled")
+                    // [T-android-thinking-loop-breaker] Shared translation —
+                    // see translateLoopError (message + 重试 pill).
+                    } catch (e: ThinkingLoopException) {
+                        translateLoopError(e)
                     } catch (e: Exception) {
                         AppLogger.error(TAG_STREAM, "retryLast runAgentLoop EXCEPTION ${e.javaClass.simpleName}: ${e.message}")
                         Log.e(TAG, "Agent loop error (retryLast)", e)
@@ -7442,6 +8002,24 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * [T-android-thinking-loop-breaker] Shared terminal-translation for
+     * ThinkingLoopException across all runAgentLoop call sites: the product-
+     * specified user message, plus the loop sample for diagnosis. The inline
+     * error banner renders its 重试 pill automatically for any inline error,
+     * so single-model sessions get the clickable retry for free.
+     */
+    private fun translateLoopError(e: ThinkingLoopException) {
+        // 2026-09-30: 到这里的都是"连续第三次硬触发"——fallback 队列早已跑过，
+        // 所以"请更换模型"已无意义（系统已经自动换过了）。改成实事求是的描述 +
+        // 重试 pill（InlineErrorBanner 自动渲染），不再误导用户手动换模型。
+        setInlineError(
+            "AI 的思考似乎陷入了重复循环，已自动尝试切换模型仍无法恢复。" +
+                "点下方重试再试一次，或换个对话方式（模型疑似卡在：「" + e.sample.take(20) + "…」）",
+        )
+        SessionActivityTracker.markStreamError(activeSessionId)
+    }
+
     private suspend fun runAgentLoop(
         provider: LLMProvider,
         systemPrompt: String?,
@@ -7612,6 +8190,10 @@ class ChatViewModel(
         // that emits text across several turns doesn't re-fire it and cut off
         // its own speech mid-sentence.
         var didStopStaleReadAloud = false
+        // [T-android-thinking-watchdog] Survives stream retries AND turn
+        // rounds within this reply: once an overrun fires, every subsequent
+        // attempt (including later tool rounds) runs with thinking OFF.
+        var thinkingWatchdogRetryOff = false
         for (turn in 0 until MAX_AGENT_TURNS) {
             // Sanitize history before each API call (mirrors iOS pre-API validation)
             sanitizeAgentHistory()
@@ -7852,12 +8434,84 @@ class ChatViewModel(
             // server-emitted value round-trips on the next request — DeepSeek V4
             // emits "" legitimately and fabricated text would be in-context-learned.
             var turnReasoningBlob: String? = null
+            // [T-android-thinking-watchdog] Wall-clock stamp of the FIRST
+            // thinking/reasoning delta of THIS stream attempt (0 = not armed);
+            // per-attempt because each retry must get a fresh budget. The
+            // limit is snapshotted once per round — prefs are not read per
+            // delta.
+            var thinkingPhaseStartMs = 0L
+            val thinkingWatchdogLimitMs =
+                com.miniseuleros.app.data.ThinkingWatchdogPrefs.limitSeconds() * 1000L
+
+            // Shared guard for both reasoning surfaces (ThinkingDelta and the
+            // opaque reasoning_content blob). Throws past the collector into
+            // the stream catch on overrun; arms the clock on the first delta.
+            // A second overrun after the thinking-OFF retry is NOT retried
+            // again (the catch keys off thinkingWatchdogRetryOff).
+            fun checkThinkingWatchdog(chars: Int) {
+                if (thinkingWatchdogLimitMs <= 0L) return
+                if (thinkingPhaseStartMs == 0L) {
+                    thinkingPhaseStartMs = android.os.SystemClock.elapsedRealtime()
+                    return
+                }
+                val elapsed = android.os.SystemClock.elapsedRealtime() - thinkingPhaseStartMs
+                if (elapsed > thinkingWatchdogLimitMs) {
+                    throw ThinkingOverrunException(elapsed, chars)
+                }
+            }
+
             // T321: capture finish_reason from LLMStreamChunk.Finished so we can
             // log it at turn-end alongside the empty-turn warning.
             var turnFinishReason: String? = null
+            // [T-sse-trunc-retry] Per-ATTEMPT truncation signal. 0 = this
+            // attempt's stream ended cleanly (or without the truncation shape).
+            // Reset at the top of every retry-loop iteration, so a retried
+            // attempt that comes back clean does not inherit the previous
+            // attempt's signal and loop forever.
+            var truncatedStreamTools = 0
+            var truncatedStreamArgsLen = 0
             var lastUsage: LLMUsage? = null
             val maxTokens = dynamicMaxTokens(provider, lastContextTokens)
             val toolCalls = mutableListOf<Triple<String, String, JSONObject>>() // id, name, args
+
+            // [T-android-thinking-loop-breaker] Content-level loop detector
+            // over the pre-content thinking stream (same two surfaces as the
+            // wall-clock watchdog). Throws ThinkingLoopException from inside
+            // the collector; the catch treats it as a per-model pathology and
+            // advances the group's fallback queue instead of burning the
+            // thinking-OFF retry. Declared AFTER `toolCalls` (locals have no
+            // forward references in Kotlin).
+            val thinkingLoopDetector = ThinkingLoopDetector()
+            // 2026-09-30: 累积所有软触发样本，在 turn 收尾时把"思考正在重复"的
+            // 提示注入下一轮 prompt，而不是中断流。
+            val loopHintSamples = mutableListOf<String>()
+            // 同一 turn 内软触发次数；达到 [LOOP_HINT_HARD_LIMIT] 升级为硬中断。
+            var loopHintCount = 0
+            // 跨 turn 累积的"思考重复"提示；注入到下一轮 systemPrompt，自愈。
+            var loopSteer = ""
+            fun checkThinkingLoop(text: String) {
+                if (turnTextSb.isEmpty() && toolCalls.isEmpty()) {
+                    try {
+                        thinkingLoopDetector.feed(text)
+                    } catch (hint: ThinkingLoopHint) {
+                        // 软触发：记录样本，不直接中断。turn 结束（有真实内容
+                        // 产出）时把这些样本注入下一轮 prompt 即可自愈。
+                        loopHintSamples.add(hint.sample.take(20))
+                        loopHintCount++
+                        AppLogger.warning(
+                            TAG_STREAM,
+                            "[T-think-loop] hint (recoverable) sample=${hint.sample.take(24)} " +
+                                "hints=$loopHintCount",
+                        )
+                        // 2026-09-30: 同一 turn 内连续软触发达到阈值（3 次），
+                        // 判定为真正的死循环，升级为硬中断。单次触发只注入提示，
+                        // 让模型自愈；多次仍重复才放弃这一轮。
+                        if (loopHintCount >= LOOP_HINT_HARD_LIMIT) {
+                            throw ThinkingLoopException(hint.sample)
+                        }
+                    }
+                }
+            }
             // [T-android-gemini3-thoughtsig / #179] toolCallId -> Gemini 3.x
             // thoughtSignature for this turn's calls (null for other providers).
             val toolCallSignatures = mutableMapOf<String, String>()
@@ -7908,7 +8562,21 @@ class ChatViewModel(
             // so we catch at collect level and unwrap.
             var collectDone = false
             var retryAttempt = 0  // per-turn auto-retry counter (resets on each new turn)
+            // [T-sse-trunc-retry] Per-turn budget for transparent re-issues of
+            // a stream that died mid tool-args. Kept SEPARATE from
+            // `retryAttempt` (the error-path counter) so a truncation retry
+            // never eats into the error-retry budget and vice versa: this
+            // path is invisible to the model — no error text is injected, no
+            // turn slot is consumed — so it is cheap and safe to allow
+            // separately. 2 matches the observed failure (4 straight deaths
+            // on the same route would be a dead endpoint, and the fallback
+            // chain handles that).
+            var truncRetryCount = 0
             while (!collectDone) {
+                // Per-attempt state: a retried attempt must re-derive the
+                // truncation signal from ITS OWN stream.
+                truncatedStreamTools = 0
+                truncatedStreamArgsLen = 0
                 try {
                     // [T-android-enhanced-cache] Stamp the per-turn Enhanced
                     // Cache flag onto the active provider here — the single
@@ -7957,9 +8625,16 @@ class ChatViewModel(
                     // no compact has happened, so the common path stays zero-copy.
                     currentProvider.streamMessage(
                         applyRequestImageBudget(effectiveAgentHistory()),
-                        systemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
+                        // 2026-09-30: 上一轮若触发过 loop hint，把"思考重复"提示
+                        // 拼进 systemPrompt，模型下一轮会用不同措辞推进，自愈。
+                        systemPrompt + loopSteer, dynamicMaxTokens(currentProvider, lastContextTokens),
                         tools = agentTools,
-                        thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
+                        thinkingLevel = if (currentModelSupportsReasoning) {
+                            // [T-android-thinking-watchdog] After an overrun the
+                            // retry — and every later round of this reply — runs
+                            // with thinking disabled; that IS the recovery path.
+                            if (thinkingWatchdogRetryOff) ThinkingLevel.OFF else _thinkingLevel.value
+                        } else ThinkingLevel.OFF,
                     ).collect { chunk ->
                 // [T-STALL-DIAG] Mark first byte back from the provider and log
                 // the time-to-first-chunk once per turn.
@@ -7972,7 +8647,20 @@ class ChatViewModel(
                 }
                 when (chunk) {
                     is LLMStreamChunk.ThinkingDelta -> {
+                        // [T-android-thinking-watchdog] Runaway-thinking guard
+                        // — see checkThinkingWatchdog. Only armed while the
+                        // reply is still in its PRE-CONTENT phase: once real
+                        // text/tool output has streamed, later reasoning
+                        // bursts between tool rounds are normal interleaved
+                        // behavior and are never interrupted.
+                        if (turnTextSb.isEmpty() && toolCalls.isEmpty()) {
+                            checkThinkingWatchdog(turnThinking.length)
+                        }
                         turnThinking.append(chunk.text)
+                        // [T-android-thinking-loop-breaker] Feed the content
+                        // loop detector AFTER appending, so the just-arrived
+                        // segment participates in repeat counting.
+                        checkThinkingLoop(chunk.text)
                         // Update thinking block in UI
                         val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
                         if (thinkIdx < 0) {
@@ -8289,11 +8977,31 @@ class ChatViewModel(
                         // Empty strings are preserved (DeepSeek V4 emits "" on non-thinking
                         // turns and we must round-trip exactly that). No live UI surface;
                         // the thinking panel is driven by ThinkingDelta events above.
+                        // [T-android-thinking-watchdog] Non-empty deltas arm/feed
+                        // the same pre-content guard — DeepSeek-style reasoning
+                        // loops are the exact pathology this watches for, and
+                        // they stream through THIS channel, not ThinkingDelta.
+                        if (chunk.content.isNotEmpty() && turnTextSb.isEmpty() && toolCalls.isEmpty()) {
+                            checkThinkingWatchdog(turnReasoningBlob?.length ?: 0)
+                            // [T-android-thinking-loop-breaker] Same guard on
+                            // the opaque reasoning_content surface — DeepSeek-
+                            // style loops stream through THIS channel.
+                            checkThinkingLoop(chunk.content)
+                        }
                         turnReasoningBlob = chunk.content
                     }
                     is LLMStreamChunk.Finished -> {
                         // T321: stash for empty-turn diagnostic logging below.
                         turnFinishReason = chunk.stopReason
+                    }
+                    // [T-sse-trunc-retry] Provider detected the stream died
+                    // mid tool-args (no finish_reason + args that don't parse
+                    // as complete JSON). Record the shape; the actual
+                    // transparent re-issue is decided AFTER the collect block,
+                    // where the partial-block rollback already lives.
+                    is LLMStreamChunk.StreamTruncated -> {
+                        truncatedStreamTools = chunk.truncatedToolIds.size
+                        truncatedStreamArgsLen = chunk.truncatedArgsLen
                     }
                     is LLMStreamChunk.Started -> { /* no-op */ }
                     is LLMStreamChunk.MediaAttachment -> {
@@ -8328,6 +9036,85 @@ class ChatViewModel(
                     lastUiUpdateMs = 0L
                     lastFileToolInputMs = 0L
                     lastOtherToolInputMs = 0L
+
+                    // [T-sse-trunc-retry] Truncated tool-args, caught BEFORE
+                    // collectDone so the retry runs on the same provider with
+                    // the same history — the request is re-issued verbatim, so
+                    // the model simply streams the payload a second time.
+                    //
+                    // Without this, the loop would proceed to run the tool with
+                    // whatever parseToolArgs salvaged (in the observed case:
+                    // an empty object), get a preflight rejection, feed the
+                    // model an error, and burn a full 186-232KB round-trip
+                    // doing it. The model retried 3 times that way on
+                    // 2026-09-28 before giving up; each of those retries was
+                    // itself truncated, because the fault is the route, not
+                    // the request.
+                    //
+                    // Deliberately NOT the error path: no exception, no
+                    // countdown banner, no tool-result message — nothing the
+                    // model can see. The turn budget is untouched because the
+                    // `for (turn in 0 until MAX_AGENT_TURNS)` slot is only
+                    // consumed when a turn actually dispatches tools.
+                    if (truncatedStreamTools > 0 && truncRetryCount < MAX_STREAM_TRUNCATION_RETRIES) {
+                        truncRetryCount++
+                        AppLogger.warning(
+                            TAG_STREAM,
+                            "[T-sse-trunc-retry] turn=$turn tool-args truncated " +
+                                "(tools=${truncatedStreamTools} argsChars=$truncatedStreamArgsLen) — " +
+                                "re-issuing request silently (attempt $truncRetryCount/$MAX_STREAM_TRUNCATION_RETRIES)",
+                        )
+                        // Roll back this attempt's partial UI exactly like the
+                        // error-retry path does. Truncation by definition means
+                        // the turn produced NO usable output, so nothing the
+                        // user has read is lost — but the half-rendered tool
+                        // blocks (ToolUseStart with a dangling `argsAccum`)
+                        // and any partial text MUST be removed, or they linger
+                        // as a second, wrong tool card once the retry streams
+                        // the real one.
+                        //
+                        // Local fun (not a member helper) so it captures the
+                        // per-turn mutables directly — same pattern as
+                        // materializeActiveTextBlock above.
+                        while (allToolBlocks.size > turnStartBlockIndex) {
+                            allToolBlocks.removeAt(allToolBlocks.size - 1)
+                        }
+                        // Args snapshots for the rolled-back calls are dead
+                        // weight; drop them so a later ToolInputDelta for a
+                        // re-issued call id starts from a clean ring instead of
+                        // appending onto the truncated attempt's tail.
+                        toolInputChunkRings.clear()
+                        allToolInputs.clear()
+                        turnTextSb.setLength(0)
+                        currentTextBlockSb = null
+                        turnTextBlockIdx = -1
+                        turnThinking.clear()
+                        toolCalls.clear()
+                        toolCallSignatures.clear()
+                        thinkingPhaseStartMs = 0L
+                        thinkingLoopDetector.reset()
+                        pendingChunkSb.setLength(0)
+                        lastUiUpdateMs = 0L
+                        lastFlushedLen = 0
+                        lastFileToolInputMs = 0L
+                        lastOtherToolInputMs = 0L
+                        withContext(Dispatchers.Main) {
+                            updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks)
+                        }
+                        continue  // re-issue on the same provider, no model turn spent
+                    }
+                    if (truncatedStreamTools > 0) {
+                        // Budget spent: fall through with whatever was salvaged
+                        // so the existing preflight / empty-args path produces a
+                        // real, actionable error for the model and the user
+                        // instead of silently stalling.
+                        AppLogger.warning(
+                            TAG_STREAM,
+                            "[T-sse-trunc-retry] turn=$turn gave up after $truncRetryCount transparent " +
+                                "retries (tools=$truncatedStreamTools argsChars=$truncatedStreamArgsLen) — " +
+                                "falling through to the normal tool-error path",
+                        )
+                    }
                     collectDone = true
                     // Stream completed without error — clear any lingering retry UI state.
                     if (_autoRetryAttempt.value != 0 || _autoRetryCountdown.value != 0) {
@@ -8348,7 +9135,47 @@ class ChatViewModel(
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException && e.cause == null) throw e  // real job cancellation
+                    // [T-android-thinking-loop-breaker] 2026-09-30 软触发：单次
+                    // loop hint 不中断流，而是把"思考正在重复"提示注入下一轮 prompt
+                    // 后继续本 turn 的 collect 循环（collectDone 仍未置位，下次
+                    // while 迭代会重新发 streamMessage，此时 systemPrompt 已带 steer）。
+                    if (e is ThinkingLoopHint) {
+                        Log.w(TAG, "🔁 [T-think-loop] hint (recoverable) sample=${e.sample.take(24)} — injecting steer, continuing")
+                        loopSteer += "\n\n[系统提示：你刚才的思考陷入了重复（例如「${e.sample.take(20)}」），" +
+                            "请立刻换用不同的措辞或思路推进，直接给出结论，不要再复述相同内容。]"
+                        // 重置检测器，避免同一段已缓冲内容在下一轮立刻再次触发。
+                        thinkingLoopDetector.reset()
+                        continue
+                    }
                     val actual = unwrapFlowException(e)
+                    // [T-android-thinking-watchdog] An overrun is worth exactly
+                    // one thinking-OFF retry. Engage the override here (the
+                    // streamMessage call above reads it on the next iteration)
+                    // and classify the exception as transient so it rides the
+                    // existing short-countdown retry + partial-block rollback.
+                    // A SECOND overrun with thinking already OFF is NOT retried
+                    // — it falls through to the normal fallback/error path.
+                    if (actual is ThinkingOverrunException) {
+                        if (!thinkingWatchdogRetryOff) {
+                            thinkingWatchdogRetryOff = true
+                            Log.w(TAG, "🧠 [T-android-thinking-watchdog] thinking overran (${actual.elapsedMs}ms / ${actual.thinkingChars} chars) — retrying with thinking OFF")
+                        } else {
+                            Log.w(TAG, "🧠 [T-android-thinking-watchdog] thinking overran again even with thinking OFF (${actual.elapsedMs}ms) — no further override")
+                        }
+                    }
+                    // [T-android-thinking-loop-breaker] A thinking LOOP is a
+                    // per-model pathology, not a transient hiccup: do NOT
+                    // burn the thinking-OFF retry on the same model (the loop
+                    // would just repeat), and do NOT retry-on-same-provider.
+                    // Treat it like rate-limit: immediately advance the group
+                    // fallback queue. With no queue (single model), rethrow —
+                    // the terminal catch surfaces the dedicated user message
+                    // with the actionable 重试 pill (InlineErrorBanner).
+                    val isLoopBreaker = actual is ThinkingLoopException
+                    if (isLoopBreaker) {
+                        Log.w(TAG, "🔁 [T-android-thinking-loop-breaker] loop detected (${actual.sample.take(24)}) — advancing fallback queue, no same-model retry")
+                        thinkingWatchdogRetryOff = true
+                    }
                     val isRateLimit = actual is com.miniseuleros.app.data.model.LLMError.RateLimited
                     val is5xx = actual is com.miniseuleros.app.data.model.LLMError.ProviderError &&
                         actual.detail.contains(Regex("[5][0-9]{2}"))
@@ -8358,6 +9185,11 @@ class ChatViewModel(
                     // not retry on the same provider.
                     val isTransient = actual is com.miniseuleros.app.data.model.LLMError.NetworkError ||
                         actual is com.miniseuleros.app.data.model.LLMError.TransientError ||
+                        // [T-android-thinking-watchdog] First overrun retries
+                        // via the transient path (thinkingWatchdogRetryOff was
+                        // just engaged); a second one with OFF already active
+                        // must NOT loop here.
+                        (actual is ThinkingOverrunException && !thinkingWatchdogRetryOff) ||
                         is5xx
                     if (isTransient && retryAttempt < AUTO_RETRY_DELAYS_SEC.size) {
                         val delaySec = AUTO_RETRY_DELAYS_SEC[retryAttempt]
@@ -8412,6 +9244,13 @@ class ChatViewModel(
                         turnThinking.clear()
                         toolCalls.clear()
                         toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
+                        // [T-android-thinking-watchdog] The retried attempt gets
+                        // a fresh thinking budget — the clock re-arms on its
+                        // first reasoning delta.
+                        thinkingPhaseStartMs = 0L
+                        // [T-android-thinking-loop-breaker] Fresh attempt also
+                        // resets the content-loop detector.
+                        thinkingLoopDetector.reset()
                         // T94 fix 2 + T256: throttle bookkeeping is per-stream
                         // attempt; reset alongside the partial-block rollback so
                         // the next attempt's first delta fires through immediately
@@ -8439,12 +9278,17 @@ class ChatViewModel(
                     // flash of the stale banner.
                     withContext(Dispatchers.Main) { clearInlineError() }
                     val shouldFallback = isRateLimit || is5xx ||
+                        // [T-android-thinking-loop-breaker] Loops advance the
+                        // group queue immediately — same-model retry would
+                        // just reproduce the loop.
+                        isLoopBreaker ||
                         fallbackStrategy == com.miniseuleros.app.data.model.FallbackStrategy.always
                     val nextCandidate = if (shouldFallback) remainingFallbacks.removeFirstOrNull() else null
                     val next = nextCandidate?.provider
                     if (next != null && nextCandidate != null) {
                         val reason = when {
                             isRateLimit -> "Rate limited"
+                            isLoopBreaker -> "Thinking loop (auto-switched)"
                             actual is com.miniseuleros.app.data.model.LLMError.ProviderError -> actual.detail
                             else -> actual.message ?: "Error"
                         }
@@ -8533,6 +9377,19 @@ class ChatViewModel(
                         turnThinking.clear()
                         toolCalls.clear()
                         toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
+                        // [T-android-thinking-watchdog] Fresh provider, fresh
+                        // thinking budget (thinkingWatchdogRetryOff persists —
+                        // the fallback still runs with thinking OFF).
+                        thinkingPhaseStartMs = 0L
+                        // [T-android-thinking-loop-breaker] 2026-09-30 关键修复：
+                        // fallback 到下一个 provider 前必须重置 loop 检测器（以及
+                        // 软触发的 steer 累积），否则上一 provider 缓冲里的重复字符
+                        // 会跨 provider 被带进新 provider 的 feed()，导致新模型刚
+                        // 一输出就被误判死循环，用户观感"换模型也没用"。
+                        thinkingLoopDetector.reset()
+                        loopHintSamples.clear()
+                        loopHintCount = 0
+                        loopSteer = ""
                         // loop continues — will retry collect with currentProvider
                     } else {
                         // All fallbacks exhausted. Surface the trail of tried
@@ -8594,12 +9451,19 @@ class ChatViewModel(
             // provider) returns a turn with no visible text AND no tool calls.
             // Log only; UI behavior unchanged. Pair with OpenAIProvider SSE
             // logs to triage server-empty vs parser-drop vs swallowed-exception.
+            // [T-android-reasoning-only-empty] reasoningLen > 0 narrows this to
+            // the "thought but said nothing" server failure (MonkeyCode/BaiZhiCloud
+            // style gateways: reasoning streams fully, then finish=stop with a
+            // 1–2 char visible reply). When reasoningLen == 0 too, the server
+            // sent literally nothing — a different failure shape.
+            val turnReasoningLen = (turnReasoningBlob?.length ?: 0) + turnThinking.length
             if (turnText.isEmpty() && toolCalls.isEmpty()) {
                 AppLogger.warning(
                     TAG_STREAM,
                     "empty turn detected: turn=$turn finishReason=$turnFinishReason " +
                         "reasoningLen=${turnThinking.length} reasoningBlobLen=${turnReasoningBlob?.length ?: -1} " +
-                        "model=${provider.model.id} provider=${provider.name}"
+                        "model=${provider.model.id} provider=${provider.name}" +
+                        (if (turnReasoningLen > 0) " [reasoning-only: server produced thinking but no visible reply]" else "")
                 )
             }
 
@@ -8703,6 +9567,36 @@ class ChatViewModel(
                         // Retry a fresh model round with the nudged history.
                         continue
                     }
+                    // [T-android-reasoning-only-empty] The model streamed
+                    // reasoning but produced no visible reply and there is no
+                    // tool result to nudge — the "thought, said nothing" server
+                    // failure. Nudge once anyway: drop the empty assistant turn
+                    // and retry with an explicit instruction to answer now. A
+                    // thinking model that burnt its whole budget on reasoning
+                    // usually recovers on a second ask; if the retry is ALSO
+                    // reasoning-only we fall through to the dedicated error hint
+                    // below (guard fires at most once per run, never loops).
+                    if (!didInjectEmptyToolReminder && turnReasoningLen > 0) {
+                        didInjectEmptyToolReminder = true
+                        AppLogger.warning(TAG_STREAM, "reasoning-only empty turn — dropping empty assistant turn and retrying one round with an explicit answer-now instruction (turn=$turn)")
+                        agentHistory.removeAt(agentHistory.size - 1)
+                        val lastUserIdx = agentHistory.indexOfLast { it.role == LLMMessage.Role.USER }
+                        if (lastUserIdx >= 0) {
+                            val uMsg = agentHistory[lastUserIdx]
+                            val nudge = "\n\n<system-reminder>Your previous reply contained only reasoning with no visible answer. Respond now with your final answer as visible text — do not return an empty response.</system-reminder>"
+                            val uParts = uMsg.contentParts.toMutableList()
+                            val lastTextIdx = uParts.indexOfLast { it is AgentContentPart.Text }
+                            if (lastTextIdx >= 0) {
+                                val part = uParts[lastTextIdx] as AgentContentPart.Text
+                                uParts[lastTextIdx] = part.copy(text = part.text + nudge)
+                                agentHistory[lastUserIdx] = uMsg.copy(contentParts = uParts)
+                            } else {
+                                uParts.add(AgentContentPart.Text(nudge))
+                                agentHistory[lastUserIdx] = uMsg.copy(contentParts = uParts)
+                            }
+                        }
+                        continue
+                    }
                     val window = effectiveContextWindowTokens()
                     val usedCtx = lastUsage?.latestContextTokens ?: 0
                     val contextNearFull = window != null && window > 0 && usedCtx > 0 &&
@@ -8713,6 +9607,15 @@ class ChatViewModel(
                         // at retry/switch explicitly.
                         didInjectEmptyToolReminder ->
                             context.getString(R.string.error_empty_response_after_tool)
+                        // [T-android-reasoning-only-empty] The turn DID stream
+                        // reasoning/thinking content but no visible reply
+                        // (finish=stop). The server completed "normally" — this is
+                        // the MonkeyCode/BaiZhiCloud-style failure where the model
+                        // thinks and then emits a 1–2 char answer. Name the real
+                        // cause instead of the generic "empty response" that reads
+                        // like a client bug.
+                        turnReasoningLen > 0 ->
+                            context.getString(R.string.error_empty_response_only_thinking)
                         contextNearFull ->
                             context.getString(R.string.error_empty_response_context_large)
                         else ->
@@ -8905,7 +9808,37 @@ class ChatViewModel(
                     // strings.xml refactor in other sessions. Promote to a
                     // localized R.string entry in a follow-up if needed.
                     val uiMessage = "Blocked invalid tool call"
-                    val modelMessage = "Error: Tool call rejected before execution. $preflightError The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
+                    // [T-sse-trunc-retry] The two "empty args" cases are NOT the
+                    // same fault and must not be reported as one. Observed
+                    // 2026-09-28: the model emitted 188-636 chars of a
+                    // dispatch plan, the upstream cut the stream, parseToolArgs
+                    // flattened the unparseable remainder to {}, and this
+                    // branch told the model "you sent empty arguments" — which
+                    // is factually false. The model could only respond the only
+                    // way it could: re-issue the identical call, which the
+                    // broken route truncated again, three times over, at
+                    // 186-232KB of context each.
+                    //
+                    // Distinguish by what actually arrived: chunkRing's last
+                    // entry is the accumulated-args snapshot, so a non-empty
+                    // one PROVES the upstream was mid-flight. "Missing fields"
+                    // (a partial object that parsed) stays with the old
+                    // wording — there the model genuinely under-filled.
+                    val lastSnapshot = chunkRing.lastOrNull().orEmpty()
+                    val argsWereTruncatedInTransit = args.length() == 0 && lastSnapshot.isNotEmpty()
+                    val modelMessage = if (argsWereTruncatedInTransit) {
+                        "Error: Tool call rejected before execution. Transport for '$name' was cut " +
+                            "mid-arguments: ${lastSnapshot.length} characters of the parameter JSON " +
+                            "arrived but the stream ended before it was complete, so nothing could be " +
+                            "parsed. This is a transport failure, not a malformed request. Re-issue the " +
+                            "call, but SHORTEN it: send fewer/smaller required parameters, shorter string " +
+                            "values, or split the work into several smaller calls — a large single " +
+                            "parameter payload is what gets cut. Do not repeat this call unchanged."
+                    } else {
+                        "Error: Tool call rejected before execution. $preflightError The arguments your " +
+                            "client sent were empty or missing required fields — re-issue the call with all " +
+                            "required parameters filled in. Do not retry with the same empty arguments."
+                    }
                     val blockIdxPre = allToolBlocks.indexOfFirst { it.id == id }
                     if (blockIdxPre >= 0) {
                         val elapsedPre = System.currentTimeMillis() - allToolBlocks[blockIdxPre].startTimeMs
@@ -9259,11 +10192,157 @@ class ChatViewModel(
             // /var/minis-euleros/{workspace,attachments,offloads,browser} files.
             ReadImageTool.NAME -> executeReadImageTool(argsJson)
             "shell_execute" -> executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+            // [T-ubuntu-secondary-sandbox] apt-type tasks go to the secondary
+            // Ubuntu 24.04 rootfs (Settings → Ubuntu 沙箱); main rootfs untouched.
+            "ubuntu_shell" -> executeUbuntuShellCommand(argsJson, assistantId, currentText, toolBlocks, toolId)
             "browser_use" -> executeBrowserUseTool(argsJson)
             "memory_write" -> executeMemoryWriteTool(argsJson)
             "memory_get" -> executeMemoryGetTool(argsJson)
+            // [T-android-subagent-orchestration] Multi-model orchestration:
+            // plan → waves of scoped sub-agents → facts pack for this loop.
+            "dispatch_subtasks" -> executeDispatchSubtasks(argsJson, toolId, toolBlocks, assistantId, currentText)
             else -> ToolExecutionResult("Unknown tool: $name", false)
         }
+    }
+
+    /**
+     * [T-android-subagent-orchestration] dispatch_subtasks executor.
+     *
+     * Parses the planner's plan + self-contained subtask briefs, runs them
+     * through [SubAgentOrchestrator] (write-path lease → waves, parallel
+     * within wave), streams live status lines into the tool block, and
+     * returns the aggregated facts pack as THIS loop's tool result — the
+     * only thing the main model ever sees of its sub-agents.
+     */
+    private suspend fun executeDispatchSubtasks(
+        argsJson: String,
+        toolId: String,
+        toolBlocks: MutableList<AssistantBlock>,
+        assistantId: String,
+        currentText: String,
+    ): ToolExecutionResult {
+        val toolTitle = "dispatch_subtasks"
+        val args = try { JSONObject(argsJson) } catch (_: Exception) { null }
+            ?: return ToolExecutionResult("Error: dispatch_subtasks 参数不是有效 JSON", false, toolTitle = toolTitle)
+        val planSummary = args.optString("plan", "").trim()
+        // [T-android-dispatch-stringified-subtasks] Some models serialize the
+        // subtasks array as a JSON-encoded STRING despite the items schema.
+        // Accept and decode it instead of failing with the generic
+        // required-params error (five identical failures pre-fix).
+        var subtasksArr = args.optJSONArray("subtasks")
+        if (subtasksArr == null) {
+            val raw = args.optString("subtasks", "").trim()
+            if (raw.startsWith("[")) {
+                try { subtasksArr = JSONArray(raw) } catch (_: Exception) { subtasksArr = null }
+            }
+        }
+        if (planSummary.isEmpty() || subtasksArr == null || subtasksArr.length() == 0) {
+            if (subtasksArr == null) {
+                com.miniseuleros.app.logging.AppLogger.warning(
+                    "ChatViewModel",
+                    "[T-dispatch-args] dispatch args parsed but plan/subtasks unusable " +
+                        "argsLen=${argsJson.length} head=${argsJson.take(200)}"
+                )
+            }
+            return ToolExecutionResult(
+                "Error: 'plan' 与非空 'subtasks' 数组为必填项。每个子任务必须有自包含的 " +
+                    "instructions（子模型看不到本对话）与显式权限范围（read_paths/write_paths）。",
+                false, toolTitle = toolTitle)
+        }
+        val (specs, problems) = SubTaskSpec.parseList(subtasksArr)
+        if (specs.isEmpty()) {
+            return ToolExecutionResult(
+                "Error: 没有可执行的子任务。\n" + problems.joinToString("\n") { "- $it" },
+                false, toolTitle = toolTitle)
+        }
+        val mode = args.optString("mode", "waves").trim().ifBlank { "waves" }
+
+        // Live progress → the tool block. Sub-agent coroutines produce lines
+        // from worker threads; a Main-dispatched drain job owns the block
+        // mutation (throttled) so the UI never sees cross-thread writes.
+        val lines = java.util.Collections.synchronizedList(ArrayList<String>())
+        lines.add("📋 多模型协同 · ${planSummary.take(140)}")
+        problems.forEach { lines.add("· $it") }
+        var lastFlush = 0L
+        val progressChannel = kotlinx.coroutines.channels.Channel<String>(capacity = 4096)
+        val report = kotlinx.coroutines.coroutineScope {
+            val drainJob = launch(Dispatchers.Main.immediate) {
+                for (line in progressChannel) {
+                    lines.add(line)
+                    val now = System.currentTimeMillis()
+                    if (now - lastFlush < 400) continue
+                    lastFlush = now
+                    val snapshot = synchronized(lines) { lines.joinToString("\n") }
+                    val idx = toolBlocks.indexOfFirst { it.id == toolId }
+                    if (idx >= 0) {
+                        toolBlocks[idx] = toolBlocks[idx].copy(content = snapshot)
+                        updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+                    }
+                }
+            }
+            try {
+                SubAgentOrchestrator.run(
+                    planSummary = planSummary,
+                    specs = specs,
+                    mode = mode,
+                    sessionId = activeSessionId,
+                    context = context,
+                    modelResolver = { gid, idx -> resolveSubAgentProvider(gid, idx) },
+                    onProgress = { line -> progressChannel.trySend(line) },
+                )
+            } finally {
+                progressChannel.close()
+                drainJob.join()
+            }
+        }
+        // Final forced refresh with the complete line set.
+        runCatching {
+            val idx = toolBlocks.indexOfFirst { it.id == toolId }
+            if (idx >= 0) {
+                toolBlocks[idx] = toolBlocks[idx].copy(
+                    content = synchronized(lines) { lines.joinToString("\n") })
+                withContext(Dispatchers.Main) {
+                    updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+                }
+            }
+        }
+        return ToolExecutionResult(
+            output = report.packForMainModel +
+                (report.handoffFile?.let {
+                    "\n📋 协作交接账本已系统级落盘: $it （append-only，会话被压缩后下一轮请先读它恢复协作上下文；后续派发的成果请继续写入文件，勿只留在对话里）"
+                } ?: "") +
+                (report.reportFile?.let { "\n[ORCHESTRATION JOURNAL: $it]" } ?: ""),
+            success = report.anyDone,
+            toolTitle = toolTitle,
+        )
+    }
+
+    /**
+     * [T-android-subagent-orchestration] Resolve a sub-task's model: the
+     * planner's per-task group_id wins, else the configured sub-agent group
+     * (Settings → 模型组 → 子代理). Mirrors resolveCompactSummaryProvider
+     * including the OAuth token-refresh dance (an expired cached token would
+     * 401 the sub-agent mid-run). Non-suspend: runBlocking only on the OAuth
+     * path, exactly like the compaction resolver.
+     */
+    private fun resolveSubAgentProvider(groupIdOverride: String?, poolIndex: Int = 0): Pair<LLMProvider, String>? {
+        val entry = providerRepository.resolveSubAgentEntry(groupIdOverride, poolIndex) ?: return null
+        val instance = providerRepository.instance(entry.providerInstanceId) ?: return null
+        var apiKey = providerRepository.usableApiKey(instance) ?: return null
+        if (instance.credentialType == com.miniseuleros.app.data.model.ProviderCredential.oauth) {
+            try {
+                val manager = com.miniseuleros.app.auth.OAuthManager.forInstance(context, instance)
+                val freshToken = kotlinx.coroutines.runBlocking { manager?.validAccessToken() }
+                if (freshToken != null && freshToken != apiKey) {
+                    providerRepository.saveApiKey(instance.id, freshToken)
+                    apiKey = freshToken
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Sub-agent OAuth refresh failed: ${e.message}")
+            }
+        }
+        val provider = ProviderFactory.create(instance, apiKey, entry.model, context)
+        return provider to SubAgentRunner.describeModel(entry.model.id)
     }
 
     /**
@@ -9581,6 +10660,78 @@ class ChatViewModel(
             )
         } catch (e: Exception) {
             ToolExecutionResult("Error: ${e.message}", false)
+        }
+    }
+
+    /**
+     * [T-ubuntu-secondary-sandbox] Execute a command inside the secondary
+     * Ubuntu 24.04 arm64 rootfs via [UbuntuSandbox.runCommand]. Mirrors
+     * [executeShellCommand] but without the bashism detector / delay arg:
+     * the guest is Ubuntu and every invocation is a fresh process anyway.
+     * Output streams into the tool block like shell_execute so long
+     * apt/build logs stay visible while running.
+     */
+    private suspend fun executeUbuntuShellCommand(
+        argsJson: String,
+        assistantId: String,
+        currentText: String,
+        toolBlocks: MutableList<AssistantBlock>,
+        toolId: String,
+    ): ToolExecutionResult {
+        try {
+            val args = JSONObject(argsJson)
+            val command = args.optString("command", "")
+            val cwd = args.optString("cwd", "/workspace")
+            val toolTitle = args.optString("tool_title", "ubuntu_shell")
+            val timeoutSec = args.optInt("timeout", 900).coerceIn(1, 1800)
+            if (command.isBlank()) {
+                return ToolExecutionResult("Error: 'command' is required", false, toolTitle = toolTitle)
+            }
+            if (!UbuntuSandbox.isInstalled(context)) {
+                return ToolExecutionResult(
+                    "Error: Ubuntu sandbox not installed. Install it via Settings → Ubuntu 沙箱 first.",
+                    false,
+                    toolTitle = toolTitle,
+                )
+            }
+
+            val result = withContext(Dispatchers.IO) {
+                UbuntuSandbox.runCommand(
+                    context = context,
+                    command = command,
+                    cwd = cwd,
+                    timeoutMs = timeoutSec * 1000L,
+                    lineCallback = { rawLine ->
+                        val idx = toolBlocks.indexOfFirst { it.id == toolId }
+                        if (idx >= 0) {
+                            val current = toolBlocks[idx].content
+                            val combined = if (current.isEmpty()) rawLine else "$current\n$rawLine"
+                            val trimmed = combined.lines().takeLast(50).joinToString("\n")
+                            toolBlocks[idx] = toolBlocks[idx].copy(content = trimmed)
+                            viewModelScope.launch(Dispatchers.Main) {
+                                updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+                            }
+                        }
+                    },
+                )
+            }
+
+            val (cleanedOutput, oneShotUrls) = MinisUrlMarker.extract(result.output)
+            for (raw in oneShotUrls) MinisOpenUrlBroker.offer(raw)
+            val output = cleanedOutput.ifBlank { "(no output)" }
+            val exitSuffix = if (result.exitCode != 0) " (exit code ${result.exitCode})" else ""
+            val (redactedOut, redactHits) = com.miniseuleros.app.data.EnvVarRedactor.redactIfEnabled("$output$exitSuffix")
+            if (redactHits > 0) {
+                android.util.Log.i("EnvVarRedact", "ubuntu_shell: masked $redactHits env-var value(s) in tool result")
+            }
+            return ToolExecutionResult(
+                output = redactedOut,
+                success = result.exitCode == 0,
+                toolTitle = toolTitle,
+                timedOut = result.timedOut,
+            )
+        } catch (e: Exception) {
+            return ToolExecutionResult("Error: ${e.message ?: e.javaClass.simpleName}", false)
         }
     }
 
@@ -10203,6 +11354,27 @@ Memory system (currently DISABLED):
 - If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](miniseuleros://settings/memory) to re-enable it.
 - SOUL.md (personality / identity) is unaffected by this toggle; the persona section above still applies."""
         }
+        // ── [T-android-subagent-collab-chip] Multi-model orchestration is
+        // user-gated by the input-bar chip (SubAgentCollabPrefs) on top of
+        // the structural group gate. When the chip is OFF, the dispatch_subtasks
+        // tool bullet AND the workflow section below collapse out of this
+        // prompt entirely — same coherence rule as the memory toggle: the
+        // model must never see guidance for a tool it can't call (and ~1KB
+        // of workflow tokens stay out of prompts that don't need it).
+        val collabOn = providerRepository.subAgentsAvailable() &&
+            SubAgentCollabPrefs.enabled.value
+        val collabToolBullet = if (collabOn) {
+            "- dispatch_subtasks: Multi-model orchestration. Send a PLAN of self-contained subtasks to sub-agent models drawn from the user's model groups. Each subtask carries explicit instructions AND a permission scope (read_paths/write_paths globs, allowed tools) — the harness REJECTS every request beyond the scope, so a misbehaving sub-agent cannot touch anything else. Sub-agents return structured facts packs; only packs enter this context. Prefer it over doing everything inline when a task decomposes into ≥2 independent work items (research+implement+verify), when bulk steps suit a cheaper/faster model, or when parallelism helps. Never dispatch a subtask you could resolve with one tool call.\n"
+        } else ""
+        val collabWorkflowSection = if (collabOn) """
+
+Multi-model collaboration (dispatch_subtasks) workflow:
+1. PLAN first: decompose the request into subtasks with clear boundaries. Each subtask's instructions MUST be self-contained — sub-agents see NOTHING of this conversation, so restate the goal, the concrete steps, file paths, and exactly what to return.
+2. SCOPE each subtask: declare read_paths/write_paths (linux path globs) covering ONLY what it needs, and list the tools it may use. The harness rejects out-of-scope requests — a sub-agent that hits a denial will report BLOCKED; widen its scope and re-dispatch if the denial was reasonable.
+3. Dispatch: default mode "waves" serializes subtasks whose write paths collide (file-write lease) and parallelizes independent ones. When you name group_id, it must be a group the user configured (minis-config `get --filter groups`); otherwise the default sub-agent group from Settings → 模型组 is used.
+4. Consume results: each returned facts pack has STATUS/SUMMARY/FACTS/FILES/ISSUES. Verify claims against artifacts (spot-check files) before relying on them. FAILED/BLOCKED subtasks → fix the brief or scope and re-dispatch ONLY the failed ones.
+5. Integrate: you own the final deliverable. Combine packs, resolve conflicts yourself, then produce the final answer. If a run's journal path is returned, it is on disk for audit/debugging.
+""" else "\n"
         val base = identitySection + """You should proactively use shell commands to accomplish the user's tasks — managing files, networking, and any other operations a Linux terminal can perform.
 
 Available tools:
@@ -10283,7 +11455,7 @@ CLI tools at /usr/local/bin with the `android-` prefix give you access to Androi
 - minis-open <url-or-path>: Opens a resource inside Minis without leaving the chat. Accepts http/https URLs (→ built-in WebKit preview) and chat-resource file paths under /var/minis-euleros/** (→ built-in file preview, routed by extension: images to the image viewer, .md to markdown preview, .html to HTML preview, .pdf/office docs to QuickLook, audio/video to the media player, else share sheet). Examples: minis-open https://example.com, minis-open /var/minis-euleros/workspace/report.md, minis-open /var/minis-euleros/attachments/chart.png. Prefer this over android-open for anything that can be previewed in-app so the user doesn't lose conversation context. Use android-open for non-web schemes (tel:, mailto:, geo:, intent:, etc.) or when the user explicitly wants the system handler.
 - minis-sessions-cli: Manage chat sessions. `list` recent or by date range, `search --keywords` cross-session, `messages --id` to read, `send` to create/continue a session, `retry` to re-run, `status` to check, `open` to navigate the app UI. Run --help for full options.
 - minis-model-use: Invoke other LLM models pre-configured by the user. Use `minis-model-use list` to see them (includes each model's modality capabilities like image_output, audio_output, etc.), `minis-model-use search <query>` to filter by name/provider. `minis-model-use run --model <id_or_name>` sends an OpenAI-compatible messages request; pass input via --input <json_file> or stdin, output goes to stdout or --output <path>. The OpenAI shape is the PRIMARY input for every model and modality; standard params are auto-converted to the underlying provider, so do not hand-write provider-native bodies as the primary input. For provider-specific extras the standard schema doesn't model (web-search plugins, image-to-image fields, TTS/video or other custom endpoints), escape hatches exist for OpenAI-compatible providers (they error or are ignored on Anthropic/Gemini models): `extra_body` (object merged verbatim into the request body), a custom `endpoint` path, and a top-level `passthrough` envelope for fully verbatim requests with RAW (unparsed) responses. Results may carry `warnings` (fields that were ignored/downgraded and why) and `applied_extras` (which extras actually took effect) — read them to self-correct. Run --help for the full contract before using these. Models may support multimodal output (image generation, TTS/audio, video) — check the modalities field in list output. For image_output models, pass generation params in the input JSON: top-level `n`/`size`/`quality`/`prompt` (OpenAI /images/generations style) or `generation_config.{aspect_ratio,image_size,number_of_images,person_generation}` (Gemini). Run with --help for full usage.
-- minis-config: Read or change Minis settings programmatically. Run `minis-config --help` for subcommands and `minis-config topic-help <topic>` for details on a specific area. For array-valued fields (e.g. `models`, `groups`, `envvars`, `defaults.agentLoopEntries`) the `get` subcommand accepts `--filter <keywords>` (whitespace-AND, case-insensitive substring match against each element's JSON) and `--page <N> --page-size <N>` (default 20, max 100) — use these instead of dumping the full list when you only need a subset, and check the response's `pagination` / `agent_hint` fields for the next-page command. Every write triggers an in-app confirmation sheet and is logged to a revertable audit (1000-entry rolling log). After a successful change the response includes a `user_message` field — relay it (or paraphrase) so the user knows how to review or revert via Settings → Logs → Config Changes. If the call returns `permission_denied`, the user has disabled minis-config in [Settings → Permissions](miniseuleros://settings/permissions); relay that message and don't retry. You CAN add new providers and write their `apiKey` (literal string OR a `${'$'}${'$'}ENV_VAR` reference to copy from an env var at write time), but `get` never echoes API keys / OAuth tokens / env var values back — those reads return `permission_denied` by design. OAuth tokens and env var values are not settable via this tool; for an env var, point the user at [Set ENV_NAME](miniseuleros://settings/environments?create_key=ENV_NAME&create_value=) so they enter the value themselves.
+${collabToolBullet}- minis-config: Read or change Minis settings programmatically. Run `minis-config --help` for subcommands and `minis-config topic-help <topic>` for details on a specific area. For array-valued fields (e.g. `models`, `groups`, `envvars`, `defaults.agentLoopEntries`) the `get` subcommand accepts `--filter <keywords>` (whitespace-AND, case-insensitive substring match against each element's JSON) and `--page <N> --page-size <N>` (default 20, max 100) — use these instead of dumping the full list when you only need a subset, and check the response's `pagination` / `agent_hint` fields for the next-page command. Every write triggers an in-app confirmation sheet and is logged to a revertable audit (1000-entry rolling log). After a successful change the response includes a `user_message` field — relay it (or paraphrase) so the user knows how to review or revert via Settings → Logs → Config Changes. If the call returns `permission_denied`, the user has disabled minis-config in [Settings → Permissions](miniseuleros://settings/permissions); relay that message and don't retry. You CAN add new providers and write their `apiKey` (literal string OR a `${'$'}${'$'}ENV_VAR` reference to copy from an env var at write time), but `get` never echoes API keys / OAuth tokens / env var values back — those reads return `permission_denied` by design. OAuth tokens and env var values are not settable via this tool; for an env var, point the user at [Set ENV_NAME](miniseuleros://settings/environments?create_key=ENV_NAME&create_value=) so they enter the value themselves.
 - minis-scheduled: Create and manage scheduled tasks — prompts that run automatically at a chosen time. `minis-scheduled create --time HH:MM --prompt "..." [--label L] [--repeat once|daily|weekdays|custom --days mon,tue,...] [--target new|follow-up|rerun --session <id> --message <id>] [--model <modelId>] [--start YYYY-MM-DD] [--end YYYY-MM-DD]` schedules it; `list` shows existing tasks (with nextTriggerMs and run history), `delete --id <taskId>`, `enable`/`disable --id <taskId>`, and `run --id <taskId>` fires one immediately. Target modes: `new` runs the prompt in a fresh chat; `follow-up` appends the prompt to an existing chat (--session); `rerun` re-runs an existing chat (--session) from a chosen user message (--message). Use this when the user asks to "remind me / do X every morning / run this later / schedule a task". Run --help for full usage.
 Interactive terminal: miniseuleros://open_terminal opens a terminal for tasks that require interactive stdin (passwords, ssh, TUI apps like htop/vi). Write it as a Markdown link in your response — the app opens it when tapped. The optional init_command parameter pre-fills (NOT executes) a command; it MUST be fully percent-encoded (spaces → %20, & → %26, | → %7C, etc.). Only use this for genuinely interactive sessions — for everything else, use shell_execute. Examples: [Open Terminal](miniseuleros://open_terminal), [Login to SSH](miniseuleros://open_terminal?init_command=ssh%20user%40host).
 
@@ -10291,8 +11463,7 @@ Environment variables:
 - Shell environment variables may contain sensitive API keys, tokens, or passwords. NEVER echo, print, cat, or otherwise output their values to stdout/stderr. Always reference them by variable name (e.g. ${'$'}API_KEY) inside scripts or commands — never inline the literal value.
 - When a skill or task requires an environment variable that is not set, tell the user which variable is missing and provide a tappable deep link to create it: [Set ENV_NAME](miniseuleros://settings/environments?create_key=ENV_NAME&create_value=) — the user can tap it to open the Environment Variables page with the key pre-filled.
 - Settings deep links: when you tell the user "go to Settings → X" or want to point them at a specific setting, prefer a Markdown link `[Label](miniseuleros://settings/<path>)` over plain prose. Available paths: providers (list), providers/<instanceId> (one provider), model-groups (incl. Agent Loop), model-groups/<groupId>, usage (token usage), skills, memory, storage, shared-folders (Shared Folders: /var/minis-euleros/{shared,skills,memory}), mount-external (Mount External Folders), logs, appearance, background, about, permissions, environments[?create_key=K&create_value=V[&create_note=N]], rootfs (also reachable as mirrors). Unknown paths fall back to Settings home, but prefer the exact path so users land where they want. These settings/action links are app deep links — render them as Markdown links in chat (same action-vs-resource rule as the miniseuleros:// section above: only /var/minis-euleros resource URLs may go to browser_use).
-- To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}
-
+- To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}${collabWorkflowSection}
 Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the native alarm tool (AlarmManager) or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)"""
 
         // Match iOS order exactly: skills → global memory → recent daily memory.
@@ -11331,6 +12502,38 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         return ProviderFactory.create(instance, apiKey, entry.model, context)
     }
 
+    /**
+     * [T-android-compact-summary-model] Dedicated compaction-summary model:
+     * resolves `compactSummaryGroupId`'s first credentialed member and builds
+     * a provider for it, mirroring resolveTitleProvider (including the OAuth
+     * token refresh dance). Returns null when no summary group is configured
+     * or none of its members is usable — the compaction path then falls back
+     * to the active chat model (pre-feature behavior).
+     */
+    private fun resolveCompactSummaryProvider(): Pair<LLMProvider, LLMModel>? {
+        val entry = providerRepository.resolveCompactSummaryEntry() ?: return null
+        val instance = providerRepository.instance(entry.providerInstanceId) ?: return null
+        var apiKey = providerRepository.usableApiKey(instance) ?: return null
+
+        // Same OAuth-refresh reasoning as resolveTitleProvider: an OAuth
+        // summary model with an expired cached token would 401 mid-compaction
+        // and burn the degraded-outline path. Non-fatal on failure.
+        if (instance.credentialType == com.miniseuleros.app.data.model.ProviderCredential.oauth) {
+            try {
+                val manager = com.miniseuleros.app.auth.OAuthManager.forInstance(context, instance)
+                val freshToken = kotlinx.coroutines.runBlocking { manager?.validAccessToken() }
+                if (freshToken != null && freshToken != apiKey) {
+                    providerRepository.saveApiKey(instance.id, freshToken)
+                    apiKey = freshToken
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Compact summary OAuth refresh failed: ${e.message}")
+            }
+        }
+        val provider = ProviderFactory.create(instance, apiKey, entry.model, context)
+        return provider to entry.model
+    }
+
     /** Parse LLM response for title/category JSON. Multiple fallback strategies. */
     private fun parseTitleResponse(text: String): TitleGenResult {
         val cleaned = text.trim()
@@ -11392,6 +12595,15 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
 
     fun cancelStream() {
         AppLogger.info(TAG_STREAM, "cancelStream invoked _isStreaming=false (sid=$activeSessionId)")
+        // [T-compact-stop-button] An in-flight AUTO compaction runs in
+        // viewModelScope, not in streamJob — cancelling streamJob alone left the
+        // compact call streaming for up to COMPACT_TIMEOUT_MAX_MS after the user
+        // pressed Stop, with the "compacting…" indicator still up. That is what
+        // made the button feel dead. Cancel both.
+        if (_isCompacting.value) {
+            AppLogger.info(TAG, "[Compact] Stop pressed during compaction — cancelling compact job")
+            cancelCompact()
+        }
         streamJob?.cancel()
         _isStreaming.value = false
         // T-streaming-side-channel: flush any in-flight delta back into the
@@ -12429,6 +13641,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
      */
     private fun friendlyToolTitle(toolName: String): String = when (toolName) {
         "shell_execute" -> "Execute Shell"
+        "dispatch_subtasks" -> "多模型协同派发"
         "file_read" -> "Read File"
         "file_write" -> "Write File"
         "file_edit" -> "Edit File"

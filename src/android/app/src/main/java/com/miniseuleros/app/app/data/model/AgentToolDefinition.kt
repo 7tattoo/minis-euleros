@@ -78,16 +78,27 @@ data class AgentToolParam(
     val type: String,
     val description: String,
     val enumValues: List<String>? = null,
+    // [T-android-dispatch-args-schema] Nested schema for array params. Without
+    // it, an array param ships as {"type":"array"} with NO items definition —
+    // models/gateways then guess the element shape and some serialize the
+    // array as a JSON-encoded string (dispatch_subtasks.subtasks hit exactly
+    // this: optJSONArray() returned null → misleading "required params missing"
+    // error). Carries the OpenAI/Gemini-compatible item schema, e.g. an object
+    // with properties. Applies to BOTH toJson() (Anthropic + OpenAI) and
+    // toGeminiJson().
+    val items: JSONObject? = null,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("type", type)
         put("description", description)
         if (enumValues != null) put("enum", JSONArray(enumValues))
+        if (items != null) put("items", items)
     }
 
     fun toGeminiJson(): JSONObject = JSONObject().apply {
         put("type", type.uppercase())
         put("description", description)
         if (enumValues != null) put("enum", JSONArray(enumValues))
+        if (items != null) put("items", items)
     }
 }

@@ -90,6 +90,7 @@ class ToolOverlayController(private val context: Context) {
         // so labels ellipsize within the same envelope instead of
         // pushing the box outward.
         private const val CAPSULE_WIDTH_FRACTION = 0.50f
+        private const val CAPSULE_WIDTH_LANDSCAPE_FRACTION = 0.30f
         private const val CAPSULE_WIDTH_FLOOR_DP = 180
         // [T-android-overlay-landscape-width-rotation-drift] Upper bound on
         // the capsule width. In landscape `widthPixels` is large, so the
@@ -699,7 +700,12 @@ class ToolOverlayController(private val context: Context) {
             (dm.widthPixels * CAPSULE_WIDTH_CAP_FRACTION).toInt(),
             dpToPx(CAPSULE_WIDTH_CAP_DP),
         )
-        return (dm.widthPixels * CAPSULE_WIDTH_FRACTION).toInt()
+        val fraction = if (dm.widthPixels > dm.heightPixels) {
+            CAPSULE_WIDTH_LANDSCAPE_FRACTION
+        } else {
+            CAPSULE_WIDTH_FRACTION
+        }
+        return (dm.widthPixels * fraction).toInt()
             .coerceAtMost(cap)
             .coerceAtLeast(dpToPx(CAPSULE_WIDTH_FLOOR_DP))
     }

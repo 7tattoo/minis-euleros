@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MinisEulerOS</string>
+    <string name="app_name">Minis</string>
     <string name="new_chat">新对话</string>
     <string name="settings">设置</string>
     <string name="providers">AI 服务商</string>
@@ -197,6 +197,11 @@
     <string name="model_groups_voice_input">语音输入</string>
     <string name="model_groups_voice_output">语音输出</string>
     <string name="model_groups_vision">视觉输入</string>
+    <string name="model_groups_compact_summary">压缩摘要</string>
+    <string name="model_groups_sub_agent">子代理（多模型协同）</string>
+    <string name="model_groups_sub_agent_hint">分组即子代理模型池：先在本页底部「+ 添加分组」建组并加入成员模型，再回到这里绑定。派发时子任务按顺序轮流使用组内可用模型，其余成员作回退。</string>
+    <string name="chat_menu_thinking_watchdog">思考超时</string>
+    <string name="thinking_watchdog_off">关闭</string>
     <string name="mcp_form_env_insert_app_var">插入应用变量</string>
     <string name="mcp_form_env_clear">清除</string>
     <string name="mcp_form_env_clear_confirm_title">清除环境变量？</string>
@@ -275,6 +280,8 @@
     <string name="soul_icon_error_too_large">该图片过大，无法存储。请换一张更简单的。</string>
     <string name="settings_env_vars">环境变量</string>
     <string name="settings_env_vars_subtitle">注入到沙箱内的变量</string>
+    <string name="settings_ubuntu_sandbox">Ubuntu 沙箱</string>
+    <string name="settings_ubuntu_sandbox_subtitle">二级 Ubuntu 24.04（arm64）：apt、gcc、完整软件生态</string>
     <string name="settings_section_storage">存储</string>
     <string name="settings_storage_subtitle">管理 EulerOS Linux rootfs 并浏览文件</string>
     <string name="settings_section_permissions">权限</string>
@@ -1208,6 +1215,7 @@
         <item quantity="other">将删除本条消息及其之后的全部内容，共 %d 条消息。此操作无法撤销。</item>
     </plurals>
     <string name="chat_edit_exit_button">退出编辑</string>
+    <string name="chat_chip_collab">协作</string>
     <string name="chat_show_sidebar">显示会话列表</string>
     <string name="chat_hide_sidebar">隐藏会话列表</string>
     <string name="chat_clear_dialog_body">删除此会话的所有消息？工作区文件、附件和卸载内容会保留。</string>
@@ -1723,6 +1731,7 @@
     <string name="error_empty_response_generic">模型返回了空响应。请重试或切换模型。</string>
     <string name="error_empty_response_context_large">模型返回了空响应。会话上下文可能过大 —— 请尝试压缩上下文或开启新会话。</string>
     <string name="error_empty_response_after_tool">在工具结果之后，即使经过提醒，模型仍未返回任何响应。它可能已过载 —— 请重试或切换模型。</string>
+    <string name="error_empty_response_only_thinking">模型思考完但未输出正文（finish=stop 且只有思考内容）。这是服务端问题 —— 请重试或更换模型/通道。</string>
     <string name="thinking_truncated_hint">显示最后 %1$dK / 共 %2$dK 字符</string>
     <string name="thinking_view_full">查看完整内容</string>
     <string name="voice_link_to_host">%1$s 的链接</string>

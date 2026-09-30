@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MinisEulerOS</string>
+    <string name="app_name">Minis</string>
     <string name="new_chat">New Chat</string>
     <string name="settings">Settings</string>
     <string name="providers">Providers</string>
@@ -230,6 +230,12 @@
     <string name="model_groups_voice_output">Voice Output</string>
     <!-- [T-android-vision-group / GH#182] Vision Input slot label: the group whose vision-capable members read images for a main model that cannot natively see them. -->
     <string name="model_groups_vision">Vision Input</string>
+    <string name="model_groups_compact_summary">Compact Summary</string>
+    <string name="model_groups_sub_agent">Sub-agent (Multi-model)</string>
+    <!-- [T-android-subagent-pool] How-to under the sub-agent binding. -->
+    <string name="model_groups_sub_agent_hint">A group is the sub-agent pool: tap “+ Add group” at the bottom of this page, add member models, then bind it here. Subtasks rotate across the pool’s available members; extra members act as fallback.</string>
+    <string name="chat_menu_thinking_watchdog">Thinking timeout</string>
+    <string name="thinking_watchdog_off">Off</string>
     <!-- [T-mcp-env-var-picker-android] Insert a reference to an App env var as $$VAR -->
     <string name="mcp_form_env_insert_app_var">Insert app var</string>
     <!-- [T-mcp-env-var-delete-confirm-android] Clear-all env vars affordance + confirm -->
@@ -313,6 +319,8 @@
     <string name="soul_icon_error_too_large">That image is too large to store. Try a simpler one.</string>
     <string name="settings_env_vars">Environment Variables</string>
     <string name="settings_env_vars_subtitle">Variables injected into the sandbox</string>
+    <string name="settings_ubuntu_sandbox">Ubuntu sandbox</string>
+    <string name="settings_ubuntu_sandbox_subtitle">Secondary Ubuntu 24.04 (arm64): apt, gcc, full package ecosystem</string>
     <string name="settings_section_storage">Storage</string>
     <string name="settings_storage_subtitle">Manage EulerOS Linux rootfs and browse files</string>
     <string name="settings_section_permissions">Permissions</string>
@@ -1332,6 +1340,9 @@
         <item quantity="other">This message and everything after it will be deleted. %d messages in total. This cannot be undone.</item>
     </plurals>
     <string name="chat_edit_exit_button">Exit Edit Mode</string>
+    <!-- [T-android-subagent-collab-chip] Input-bar pill toggle for multi-model
+         orchestration (dispatch_subtasks). Coomi-style mode chip. -->
+    <string name="chat_chip_collab">Collab</string>
     <string name="chat_show_sidebar">Show session list</string>
     <string name="chat_hide_sidebar">Hide session list</string>
     <string name="chat_clear_dialog_body">Remove all messages from this session? Files in workspace, attachments, and offloads are kept.</string>
@@ -1892,6 +1903,8 @@
     <string name="error_empty_response_generic">Model returned an empty response. Please try again or switch models.</string>
     <string name="error_empty_response_context_large">The model returned an empty response. The conversation context may be too large — try compacting or starting a new session.</string>
     <string name="error_empty_response_after_tool">The model returned no response after a tool result, even after a reminder. It may be overloaded — please retry or switch models.</string>
+    <!-- [T-android-reasoning-only-empty] The stream finished cleanly (finish=stop) but produced only reasoning/thinking content — the visible reply is blank. This is a server-side behavior (the model "thought" and then said nothing), not a client parse failure. -->
+    <string name="error_empty_response_only_thinking">The model finished thinking but returned no visible reply (finish=stop with only reasoning content). This is a server-side issue — please retry or switch models/channels.</string>
     <!-- [T-thinking-render-perf-android] Inline windowed-tail hint + large-content viewer entry. -->
     <string name="thinking_truncated_hint">Showing last %1$dK of %2$dK characters</string>
     <string name="thinking_view_full">View full content</string>

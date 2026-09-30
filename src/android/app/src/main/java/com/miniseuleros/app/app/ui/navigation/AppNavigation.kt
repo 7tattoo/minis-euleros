@@ -73,6 +73,7 @@ import com.miniseuleros.app.ui.settings.MemoryFileEditScreen
 import com.miniseuleros.app.ui.settings.MemoryManagementScreen
 import com.miniseuleros.app.ui.settings.OffloadPermissionScreen
 import com.miniseuleros.app.ui.settings.ShizukuPermissionScreen
+import com.miniseuleros.app.ui.settings.UbuntuSandboxScreen
 import com.miniseuleros.app.sandbox.RootfsManager
 import com.miniseuleros.app.sandbox.TerminalSession
 import com.miniseuleros.app.ui.terminal.TerminalScreen
@@ -125,6 +126,9 @@ object Routes {
     const val FILE_BROWSER = "file_browser"
     const val FILE_PREVIEW = "file_preview"
     const val ENV_VARS = "env_vars"
+
+    /** [T-ubuntu-secondary-sandbox] Secondary Ubuntu 24.04 rootfs management. */
+    const val UBUNTU_SANDBOX = "ubuntu_sandbox"
     const val SKILLS = "skills"
     const val SKILL_DETAIL = "skill/{skillId}"
     const val SKILL_FILE = "skill_file/{skillId}/{relativePath}"
@@ -588,6 +592,7 @@ fun AppNavigation(
                 onRootfsClick = { navController.safeNavigate(Routes.STORAGE) },
                 onBackupClick = { navController.safeNavigate(Routes.BACKUP) },
                 onEnvVarsClick = { navController.safeNavigate(Routes.ENV_VARS) },
+                onUbuntuSandboxClick = { navController.safeNavigate(Routes.UBUNTU_SANDBOX) },
                 onSkillsClick = { navController.safeNavigate(Routes.SKILLS) },
                 onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
                 onMemoryClick = { navController.safeNavigate(Routes.MEMORY) },
@@ -1161,6 +1166,12 @@ fun AppNavigation(
             val item = FilePreviewHolder.currentItem ?: return@dialog
             FilePreviewScreen(
                 item = item,
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        composable(Routes.UBUNTU_SANDBOX) {
+            UbuntuSandboxScreen(
                 onBack = { navController.safePopBackStack() },
             )
         }

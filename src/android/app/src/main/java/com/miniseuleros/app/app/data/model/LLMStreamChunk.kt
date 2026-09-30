@@ -31,6 +31,30 @@ sealed class LLMStreamChunk {
     ) : LLMStreamChunk()
 
     /**
+     * [T-sse-trunc-retry] The stream TERMINATED without a finish_reason while
+     * one or more tool calls had accumulated partial (unterminated) argument
+     * JSON — i.e. the upstream died mid tool-args and the connection closed
+     * without [DONE] or any terminal event. Emitted at most once per stream,
+     * immediately BEFORE the Finished(null) tail, so the ChatViewModel agent
+     * loop can detect the "truncated tool args without finish" shape and
+     * transparently re-issue the same request instead of feeding the model
+     * unparseable/empty args for a whole round-trip.
+     *
+     * Field provenance (all captured by the provider at stream end):
+     *  - [truncatedToolIds]  ids of tool calls whose args StringBuilder did
+     *                        not parse as complete JSON
+     *  - [truncatedArgsLen]  total chars accumulated across those builders
+     *  - [hasFinishReason]   always false when this chunk is emitted (guard
+     *                        on the producer side; kept explicit for the
+     *                        consumer's readability)
+     */
+    data class StreamTruncated(
+        val truncatedToolIds: List<String>,
+        val truncatedArgsLen: Int,
+        val hasFinishReason: Boolean = false,
+    ) : LLMStreamChunk()
+
+    /**
      * [T-codex-gpt-image2-oauth-android] A model-generated media attachment
      * (e.g. an image from the Codex image_generation tool). Carried through the
      * stream so non-streaming callers (sendMessage → minis-model-use) can

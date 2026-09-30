@@ -119,12 +119,27 @@ object OpenAIModelsApi {
         }
 
         val models = try {
-            val json = JSONObject(body)
-            val data = json.optJSONArray("data") ?: return@withContext fallback
+            // OpenAI-compatible gateways are not consistent here: most use
+            // {"data":[...]}, while lightweight/local gateways commonly use
+            // {"models":[...]} or even return the array as the root value.
+            // Parse all three shapes and only fall back when none is present.
+            val data = when (val root = org.json.JSONTokener(body).nextValue()) {
+                is JSONObject -> root.optJSONArray("data") ?: root.optJSONArray("models")
+                is JSONArray -> root
+                else -> null
+            } ?: return@withContext fallback
             val parsed = mutableListOf<LLMModel>()
             for (i in 0 until data.length()) {
-                val obj = data.getJSONObject(i)
-                val id = obj.getString("id")
+                val item = data.opt(i)
+                val obj = item as? JSONObject
+                val id = when (item) {
+                    is JSONObject -> item.optString("id").ifBlank {
+                        item.optString("model").ifBlank { item.optString("name") }
+                    }
+                    is String -> item
+                    else -> ""
+                }
+                if (id.isBlank()) continue
 
                 // Only filter by chat prefixes for official OpenAI endpoints;
                 // custom endpoints (vLLM, Ollama) may serve any model ID.
@@ -134,12 +149,12 @@ object OpenAIModelsApi {
                     if (id.contains(":ft-")) continue
                 }
 
-                val displayName = obj.optString("name", id)
+                val displayName = obj?.optString("name", id)?.ifBlank { id } ?: id
                 // Third-party gateways (vLLM, OpenRouter-compat proxies) often
                 // report per-model modalities under `architecture.{input,output}_modalities`
                 // the same way OpenRouter does — pick them up so vision/audio
                 // models are routable without waiting for models.dev enrichment.
-                val arch = obj.optJSONObject("architecture")
+                val arch = obj?.optJSONObject("architecture")
                 // OpenAI / OpenRouter return modalities as `image_input` / `text_output` with
                 // suffixes; the rest of the codebase (models.dev, capability fragments,
                 // ModelEntryDetailScreen toggles) uses the bare form. Normalize at the parse

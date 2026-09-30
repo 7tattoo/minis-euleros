@@ -43,6 +43,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +80,7 @@ fun SettingsScreen(
     onRootfsClick: () -> Unit = {},
     onBackupClick: () -> Unit = {},
     onEnvVarsClick: () -> Unit = {},
+    onUbuntuSandboxClick: () -> Unit = {},
     onSkillsClick: () -> Unit = {},
     onTerminalClick: () -> Unit = {},
     onMemoryClick: () -> Unit = {},
@@ -213,6 +215,13 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_env_vars),
                     subtitle = stringResource(R.string.settings_env_vars_subtitle),
                     onClick = onEnvVarsClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.Memory,
+                    iconColor = Color(0xFFD95320),
+                    title = stringResource(R.string.settings_ubuntu_sandbox),
+                    subtitle = stringResource(R.string.settings_ubuntu_sandbox_subtitle),
+                    onClick = onUbuntuSandboxClick,
                     showDivider = false,
                 )
             }

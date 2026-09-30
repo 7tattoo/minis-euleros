@@ -410,6 +410,21 @@ data class ProviderConfig(
     // voiceInputGroupId (meta KV row, not synced CRDT member maps). Absent in
     // old persisted JSON → deserializes to null (ignoreUnknownKeys + default).
     var visionGroupId: String? = null,
+    // [T-android-compact-summary-model] The group whose members generate
+    // context-compaction summaries. The active chat model may be a
+    // reasoning-only model that never emits summary text (1.13.1/1.13.2
+    // degraded-outline failures), so compaction gets its own binding.
+    // Per-device pointer at an ordinary ModelGroup, mirroring
+    // defaultSubGroupId. Absent in old persisted JSON → null (fallback to
+    // the active chat model, the pre-feature behavior).
+    var compactSummaryGroupId: String? = null,
+    // [T-android-subagent-orchestration] The DEFAULT sub-agent model group
+    // for dispatch_subtasks. The orchestrator picks each subtask's model
+    // from here unless the planner names a per-task group_id. Per-device
+    // pointer at an ordinary ModelGroup, mirroring compactSummaryGroupId.
+    // Absent in old persisted JSON → null (tool stays hidden until a group
+    // is chosen, mirroring the ubuntu_shell gate).
+    var subAgentGroupId: String? = null,
     // Models and groups exposed to the agent loop (minis-model-use terminal
     // command) — mirrors iOS agentLoopModelEntryIds / agentLoopGroupIds.
     val agentLoopModelEntryIds: MutableList<String> = mutableListOf(),

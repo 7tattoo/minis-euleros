@@ -17,6 +17,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -602,6 +603,23 @@ class AnthropicProviderTest {
         // mimicry beta set must NOT carry `redact-thinking-2026-02-12`; with it,
         // the server blanks thinking text (signature only) even though the model
         // reasons. Omitting it == showThinkingSummaries:true.
+        //
+        // [T-anthropic-oauth-test-needs-private-config] Skipped unless the
+        // build supplies ANTHROPIC_OAUTH_IDENTIFIER_PROMPT. Only the OAuth
+        // path reads that value, and only from the private
+        // provider-customization.properties (git-excluded; the public mirror
+        // ships an empty .example). Faking a prefix here would make the test
+        // pass on a build that could never make a real OAuth request, which
+        // is worse than an honest skip.
+        val configured = runCatching {
+            com.miniseuleros.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+        }.getOrNull()
+        assumeTrue(
+            "ANTHROPIC_OAUTH_IDENTIFIER_PROMPT not configured for this build — " +
+                "OAuth request-body assertions need the private customization file",
+            !configured.isNullOrEmpty(),
+        )
+
         val oauthProvider = AnthropicProvider(
             apiKey = "test-oauth-token",
             model = LLMModel.claudeSonnet5,

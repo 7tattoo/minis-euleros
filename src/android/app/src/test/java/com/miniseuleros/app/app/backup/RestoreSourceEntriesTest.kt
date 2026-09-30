@@ -27,7 +27,7 @@ import org.junit.Test
 class RestoreSourceEntriesTest {
 
     private val screen: String by lazy {
-        val f = File("src/main/java/com/miniseuleros/app/ui/settings/backup/BackupAndRestoreScreen.kt")
+        val f = File("src/main/java/com/miniseuleros/app/app/ui/settings/backup/BackupAndRestoreScreen.kt")
         assertTrue("expected to find ${f.path} relative to the app module", f.isFile)
         f.readText()
     }
@@ -121,7 +121,7 @@ class RestoreSourceEntriesTest {
     @Test
     fun `the restore-server list always offers Add Server, in both states`() {
         val list = File(
-            "src/main/java/com/miniseuleros/app/ui/settings/backup/RestoreServersScreen.kt",
+            "src/main/java/com/miniseuleros/app/app/ui/settings/backup/RestoreServersScreen.kt",
         ).readText()
         // The Add row is declared OUTSIDE the remotes loop, so it renders
         // whether or not any server exists — that is what stops "none
@@ -139,7 +139,7 @@ class RestoreSourceEntriesTest {
     @Test
     fun `the Add Server form is reused, not reimplemented`() {
         val list = File(
-            "src/main/java/com/miniseuleros/app/ui/settings/backup/RestoreServersScreen.kt",
+            "src/main/java/com/miniseuleros/app/app/ui/settings/backup/RestoreServersScreen.kt",
         ).readText()
         // Hosting the shared composable is fine; declaring a second one is not.
         assertTrue(
@@ -158,7 +158,7 @@ class RestoreSourceEntriesTest {
             Regex("""fun AddServerForm\(""")
                 .findAll(
                     File(
-                        "src/main/java/com/miniseuleros/app/ui/settings/backup/RcloneDestinationsScreen.kt",
+                        "src/main/java/com/miniseuleros/app/app/ui/settings/backup/RcloneDestinationsScreen.kt",
                     ).readText(),
                 ).count(),
         )
@@ -167,7 +167,7 @@ class RestoreSourceEntriesTest {
     @Test
     fun `cancelling the add form returns to the list, not out of the screen`() {
         val list = File(
-            "src/main/java/com/miniseuleros/app/ui/settings/backup/RestoreServersScreen.kt",
+            "src/main/java/com/miniseuleros/app/app/ui/settings/backup/RestoreServersScreen.kt",
         ).readText()
         assertTrue(
             "cancel should return to the list",
@@ -178,10 +178,10 @@ class RestoreSourceEntriesTest {
     @Test
     fun `the abandoned direct-to-form entry point is gone`() {
         val dest = File(
-            "src/main/java/com/miniseuleros/app/ui/settings/backup/RcloneDestinationsScreen.kt",
+            "src/main/java/com/miniseuleros/app/app/ui/settings/backup/RcloneDestinationsScreen.kt",
         ).readText()
         val nav = File(
-            "src/main/java/com/miniseuleros/app/ui/navigation/AppNavigation.kt",
+            "src/main/java/com/miniseuleros/app/app/ui/navigation/AppNavigation.kt",
         ).readText()
         for (marker in listOf("startOnAddForm", "BACKUP_DESTINATIONS_ADD")) {
             assertFalse("$marker should have been withdrawn", dest.contains(marker))
