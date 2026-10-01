@@ -3653,6 +3653,15 @@ class OpenAIProvider private constructor(
             "HTTP $statusCode: ${body.take(500)}"
         }
 
+        // T-hw-gateway-upstream-error: an SSE inline error carries no real HTTP
+        // status (code defaults to 0 — 2026-10-01: the local HW-code-path relay
+        // on 127.0.0.1:8321 emits {"error":{"code":0,"message":"upstream
+        // error"}} when its own upstream hiccups, then closes). That failure is
+        // transient — the identical request succeeds on retry — so classify it
+        // like a 5xx (TransientError, bounded same-model retry) instead of
+        // ProviderError, which skips retry and fails the turn outright.
+        if (statusCode == 0) return LLMError.TransientError(message)
+
         val transientCodes = setOf(500, 502, 503, 504, 529)
         if (statusCode in transientCodes) {
             // 503 with permanent failure indicators → ProviderError (trigger group fallback)

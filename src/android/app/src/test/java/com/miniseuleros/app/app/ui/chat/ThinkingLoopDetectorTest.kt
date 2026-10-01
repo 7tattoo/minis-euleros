@@ -11,6 +11,9 @@ import org.junit.Test
  *  - 检测器每次触发只会抛 [ThinkingLoopHint]（软触发），**永不**直接抛
  *    [ThinkingLoopException]。硬中断由调用方在"同一 turn 内累计达到
  *    LOOP_HINT_HARD_LIMIT(3) 次软触发"时升级。
+ *  - [2026-09-30 误判修复] 空格/缩进/分隔线（─━═-_=~■▪）等格式字符不再参与
+ *    SYMBOL/SEGMENT 规则：真实流里 71/71 的 SYMBOL 触发全是「空格×15」和
+ *    「─×15」（代码缩进、表格对齐、标题分隔线），100% 假阳性。
  *  - SYMBOL 规则：ASCII/emoji 标点 15 连、CJK 标点（。！？，、；：…）30 连才触发；
  *    中文句号 20 连不算 loop（合法停顿）。
  *  - SEGMENT 规则：len>4 或英文短语 10 连触发；短 CJK 词（len<=4）需 20 连才触发，
@@ -85,6 +88,54 @@ class ThinkingLoopDetectorTest {
     fun `letter run a-10 triggers via segment rule`() {
         val e = feedUntilHint("x", "a", 12)
         assertTrue(e != null)
+    }
+
+    // ===== 2026-09-30 误判修复：格式字符豁免 =====
+
+    @Test
+    fun `15 spaces are NOT a loop (code indent in real log)`() {
+        val e = feedUntilHint("", " ", 30)
+        assertNull("spaces×15 from real log must NOT trigger", e)
+    }
+
+    @Test
+    fun `30 box-drawing rules are NOT a loop (real log false positive)`() {
+        val e = feedUntilHint("思考完成，开始执行：\n", "─", 40)
+        assertNull("─── separator from real log must NOT trigger", e)
+    }
+
+    @Test
+    fun `ascii dash and equals rules are NOT a loop`() {
+        assertNull(feedUntilHint("", "-", 40))
+        assertNull(feedUntilHint("", "=", 40))
+        assertNull(feedUntilHint("", "_", 40))
+    }
+
+    @Test
+    fun `space run does not leak into segment rule either`() {
+        // 旧行为：len=1 空格段 11 连 → SEGMENT fire（真实日志 totalChars=8258 处）。
+        val d = ThinkingLoopDetector()
+        repeat(30) {
+            try { d.feed(" ") } catch (e: ThinkingLoopHint) {
+                throw AssertionError("space run must never fire (SEGMENT or SYMBOL)", e)
+            }
+        }
+    }
+
+    @Test
+    fun `formatting chars followed by real repetition still fires`() {
+        // 豁免不能变成黑洞：格式字符之后紧跟真重复，必须照常触发。
+        val d = ThinkingLoopDetector()
+        var fired = false
+        try {
+            d.feed("分析：\n")
+            repeat(20) { d.feed("────────") }      // 分隔线（豁免）
+            repeat(25) { d.feed("啊") }             // 真重复（len=1 Han，10 连阈值）
+        } catch (e: ThinkingLoopHint) {
+            fired = true
+            assertTrue(e.sample.first() == '啊')
+        }
+        assertTrue("real repetition after formatting must still fire", fired)
     }
 
     @Test

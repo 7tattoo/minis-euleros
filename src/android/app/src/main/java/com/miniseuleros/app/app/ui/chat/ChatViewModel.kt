@@ -163,7 +163,15 @@ internal class ThinkingLoopDetector {
         // punctuation / emoji stays at 15. A string of fullwidth periods is a
         // legitimate Chinese pause/ellipsis, NOT a loop — the old 15 threshold
         // cut real thinking (2026-09-30 note).
-        if (!last.isLetterOrDigit() && !isHan(last)) {
+        // Whitespace and rule/box-drawing characters are FORMATTING, not
+        // degeneration: models legitimately indent code blocks, align tables
+        // and draw "───────" separators inside thinking. 2026-09-30 field data:
+        // 71/71 SYMBOL fires were spaces×15 (54) and "─"×15 (17) — zero real
+        // loops. Excluding them costs nothing (a model that is truly stuck
+        // repeats WORDS, which the SEGMENT rule still catches).
+        if (!last.isLetterOrDigit() && !isHan(last) &&
+            !isLoopWhitespace(last) && !isFormatSeparator(last)
+        ) {
             val symThreshold = if (isCjkPunct(last)) 30 else 15
             val lastCp = s.codePointBefore(s.length)
             var run = 1
@@ -195,7 +203,15 @@ internal class ThinkingLoopDetector {
         // Short CJK phrases (len 2..4) need ≥20 copies before they count,
         // because a single re-stated phrase like "但是不对" 10× is normal
         // reasoning, not a loop. Longer segments / english phrases stay at 10.
-        if (!isCjkPunct(last)) {
+        // [2026-09-30 误判修复] Gate scans back over trailing whitespace/format
+        // chars to the last SIGNIFICANT char: all 33 recorded SEGMENT fires were
+        // len=1 runs of pure whitespace, but an english phrase loop
+        // ("let me think. ") legitimately ends with a space — so the gate is the
+        // last non-format char, not the last char. An all-format window has no
+        // significant char and is skipped entirely.
+        var gateIdx = s.length - 1
+        while (gateIdx >= 0 && (isLoopWhitespace(s[gateIdx]) || isFormatSeparator(s[gateIdx]))) gateIdx--
+        if (gateIdx >= 0 && !isCjkPunct(s[gateIdx])) {
             val maxWindow = minOf(s.length, 120 * 20 + 8)
             val window = s.subSequence(maxOf(0, s.length - maxWindow), s.length)
             val minLen = 1
@@ -210,7 +226,7 @@ internal class ThinkingLoopDetector {
                     copies++
                     pos -= len
                 }
-                val copiesNeeded = if (len >= 2 && len <= 4 && isHan(last)) 20 else 10
+                val copiesNeeded = if (len >= 2 && len <= 4 && isHan(s[gateIdx])) 20 else 10
                 if (copies >= copiesNeeded) {
                     fire(seg.toString(), "SEGMENT len=$len copies=$copies")
                     return
@@ -237,6 +253,34 @@ internal class ThinkingLoopDetector {
 
     /** Reset between stream attempts (fresh attempt = fresh buffer). */
     fun reset() { sb.setLength(0) }
+
+    /**
+     * Whitespace / invisible formatting chars. A run of these is layout, never
+     * a loop: code-block indentation and table alignment legitimately produce
+     * 15+ spaces in a row.
+     */
+    private fun isLoopWhitespace(c: Char): Boolean {
+        if (c.isWhitespace()) return true
+        val b = c.code
+        return b == 0x00A0 || b == 0x3000 || b == 0x2007 || b == 0x202F ||  // NBSP variants
+            b == 0x200B || b == 0x200C || b == 0x200D || b == 0xFEFF        // zero-width / BOM
+    }
+
+    /**
+     * Box-drawing, block and rule characters (─ │ ━ ═ █ ░ …) plus their ASCII
+     * cousins (- = _ * ~ #). Models draw separators and box headers inside
+     * thinking; a 15-char "───────────────" rule is the single biggest false
+     * positive in the 2026-09-30 log (17 fires, all benign).
+     */
+    private fun isFormatSeparator(c: Char): Boolean {
+        val b = c.code
+        return b in 0x2500..0x257F ||   // Box Drawing
+            b in 0x2580..0x259F ||      // Block Elements
+            b in 0x25A0..0x25FF ||      // Geometric Shapes (▪ ■ ▲ …)
+            b in 0x2010..0x2015 ||      // dashes (‐‑‒–—―)
+            b in 0x2212..0x2213 ||      // minus / minus-plus
+            b == '_'.code || b == '-'.code || b == '='.code || b == '~'.code   // ASCII rules ═══ / ───
+    }
 
     /** Han / Kana / Hangul ideographs and syllables — NOT CJK punctuation. */
     private fun isHan(c: Char): Boolean {
@@ -8489,8 +8533,15 @@ class ChatViewModel(
             var loopHintCount = 0
             // 跨 turn 累积的"思考重复"提示；注入到下一轮 systemPrompt，自愈。
             var loopSteer = ""
+            // 2026-09-30 误判抑制：软触发后冷却 10s。真实死循环在 10s 内必然
+            // 继续重复；而"缩进/分隔线"这类一次性格式输出不会在冷却期内再次
+            // 攒够 15+ 连续字符。日志实证：96461→96475 三个 hint 间隔 <500ms，
+            // 全是空格×15/──×15 的格式性输出，却在 500ms 内被升级成硬中断、
+            // cancel 当天流并重发 469KB 请求——这就是"正常思考被打断"的元凶。
+            var loopHintCooldownUntilMs = 0L
             fun checkThinkingLoop(text: String) {
                 if (turnTextSb.isEmpty() && toolCalls.isEmpty()) {
+                    if (android.os.SystemClock.elapsedRealtime() < loopHintCooldownUntilMs) return
                     try {
                         thinkingLoopDetector.feed(text)
                     } catch (hint: ThinkingLoopHint) {
@@ -8498,6 +8549,8 @@ class ChatViewModel(
                         // 产出）时把这些样本注入下一轮 prompt 即可自愈。
                         loopHintSamples.add(hint.sample.take(20))
                         loopHintCount++
+                        loopHintCooldownUntilMs =
+                            android.os.SystemClock.elapsedRealtime() + 10_000L
                         AppLogger.warning(
                             TAG_STREAM,
                             "[T-think-loop] hint (recoverable) sample=${hint.sample.take(24)} " +
