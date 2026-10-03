@@ -2840,7 +2840,8 @@ class ChatViewModel(
         // state a model needs to continue; head results stay size-only.
         val sb = StringBuilder(DEGRADED_SUMMARY_PREFIX + " " + reason + ". ")
         sb.append("The summary model did not finish, so this is a mechanical outline: ")
-        sb.append("the opening messages and the most recent tail are kept, the middle ")
+        sb.append("the most recent USER instructions are quoted verbatim first, then the ")
+        sb.append("opening messages and the most recent tail are kept, and the middle ")
         sb.append("is omitted. Tail tool results include a content excerpt — that is ")
         sb.append("the CURRENT task state and where the work actually stopped. The full ")
         sb.append("messages are still in the database — revert the most recent compact ")
@@ -2919,6 +2920,38 @@ class ChatViewModel(
             // between head and tail windows is visible in the entry numbers.
             sb.append(idx + 1).append(". [").append(messages[idx].role.value).append("] ")
                 .append(line).append("\n")
+        }
+
+        // [T-compact-task-requirement-rescue] Always carry the most recent
+        // user-text turn(s) verbatim, ahead of the head/tail windows. Head and
+        // tail are both size-bounded, so in a long tool-heavy session the user's
+        // actual task requirement can fall in the OMITTED middle — and a lossy
+        // outline that never states the requirement leaves the model guessing
+        // what it was asked to do (observed 2026-10-03: the model re-scanned the
+        // transcript trying to recover the ask). This section is emitted before
+        // the head window so it survives the final budget truncation, and is
+        // labelled as the authoritative instruction to follow.
+        var taskUserIdx = messages.lastIndex
+        var taskTurnsFound = 0
+        while (taskUserIdx >= 0 && taskTurnsFound < COMPACT_KEEP_RECENT_USER_TURNS) {
+            val msg = messages[taskUserIdx]
+            // A USER message carrying a tool result is the second half of a
+            // round, not a real instruction (see walkBackUserTurnsBounded).
+            if (msg.role != LLMMessage.Role.USER ||
+                msg.contentParts.any { it is AgentContentPart.ToolResult }
+            ) {
+                taskUserIdx--
+                continue
+            }
+            val taskLine = pieceFor(msg, tailDetail = true)
+            if (taskLine != null) {
+                sb.append("TASK").append(taskTurnsFound + 1).append(". [@").append(taskUserIdx + 1).append("] ").append(taskLine).append("\n")
+                taskTurnsFound++
+            }
+            taskUserIdx--
+        }
+        if (taskTurnsFound == 0) {
+            sb.append("(no user-text instruction found in history)\n")
         }
 
         // Head window: chronological from the start (task setup).
@@ -3255,11 +3288,43 @@ class ChatViewModel(
             // [T-compact-preanchor-prune, port iOS 8b76cd74]
             val keepN = COMPACT_KEEP_RECENT_USER_TURNS
             val preAnchorCap = 100
-            val walkBack = walkBackUserTurnsBounded(
+            var walkBack = walkBackUserTurnsBounded(
                 anchorIdx = anchorIdx,
                 maxUserTextTurns = keepN,
                 maxMessages = preAnchorCap,
             )
+            // [T-compact-task-requirement-rescue] In a tool-heavy session the
+            // preAnchor cap can be consumed entirely by tool_use/tool_result
+            // traffic, so the bounded walk returns userTextTurnsFound=0 and
+            // priorIdx collapses to the "empty preAnchor" sentinel. The model
+            // then receives ONLY the summary — and with it the user's actual
+            // task requirement (which lives verbatim in that missed user turn)
+            // is silently lost. Observed 2026-10-03: 609-entry mid-loop compact
+            // → walkBack stopped with messageCapWouldExceed userTextTurnsFound=0
+            // → preAnchorSent=0 postAnchor=0, model saw only the degraded
+            // outline and had to re-scan the transcript to recover the ask.
+            // Rescue: when the bounded walk finds no user-text turn at all, walk
+            // back past the cap (bounded only by history length) until we find
+            // the most recent one — the task requirement must survive compaction
+            // at any cost. The preAnchor prune below keeps the resulting slice
+            // affordable, and the walk itself terminates at i>=0.
+            if (walkBack.userTextTurnsFound == 0) {
+                val rescue = walkBackUserTurnsBounded(
+                    anchorIdx = anchorIdx,
+                    maxUserTextTurns = keepN,
+                    maxMessages = Int.MAX_VALUE,
+                )
+                if (rescue.priorIdx != null) {
+                    AppLogger.warning(
+                        TAG,
+                        "[CompactDiag] eAH v2 task-requirement rescue: bounded walk found 0 user-text turns " +
+                            "in $preAnchorCap msgs; unbounded walk found ${rescue.userTextTurnsFound} at " +
+                            "idx=${rescue.priorIdx} (${anchorIdx - rescue.priorIdx} msgs back) — " +
+                            "carrying task requirement verbatim",
+                    )
+                    walkBack = rescue
+                }
+            }
             val priorIdxResolved: Int? = walkBack.priorIdx
             val priorIdx = walkBack.priorIdx ?: (anchorIdx + 1) // empty preAnchor sentinel
             if (walkBack.stopReason != "userTextTargetMet") {
