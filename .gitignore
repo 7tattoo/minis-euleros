@@ -152,3 +152,6 @@ deps/lame-3.100/**/.deps/
 # not a vendored binary — same treatment as the iOS Rclone.xcframework it is
 # built alongside (deps/build_rclone_ios.sh).
 src/android/app/libs/rclone.aar
+
+# Sandbox rootfs bundle (117MB, exceeds GitHub 100MB limit) — keep out of version control
+assets/euleros-minirootfs.tar

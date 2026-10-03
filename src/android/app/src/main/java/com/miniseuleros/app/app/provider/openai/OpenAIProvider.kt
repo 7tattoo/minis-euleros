@@ -232,6 +232,15 @@ class OpenAIProvider private constructor(
          * [STREAM_TTFB_TIMEOUT_MS] owns that phase.
          */
         private const val STREAM_READ_IDLE_TIMEOUT_MS = 20_000L
+        // [T-sse-idle-reasoning-escalate] A thinking model can pause silently for
+        // a long stretch mid-thought after a burst of reasoning_content. 20s is
+        // the budget for a DEAD connection; once reasoning_content has flowed we
+        // escalate to this, because an upstream that just emitted reasoning is
+        // alive — it is thinking. Long enough to ride out a real think-pause
+        // (DeepSeek/V4 reasoning bursts can gap well past 20s), short enough that
+        // a truly dead gateway (the 60s hold case) is still caught well before
+        // its own idle timeout. 120s also stays under the socket readTimeout.
+        private const val STREAM_READ_IDLE_REASONING_TIMEOUT_MS = 120_000L
 
         /** [T-sse-read-idle-watchdog] Poll cadence for the read-idle watchdog. */
         private const val STREAM_READ_IDLE_POLL_MS = 500L
@@ -952,16 +961,31 @@ class OpenAIProvider private constructor(
         // succeeded, so this is an upstream-stall, not a stale pooled socket.
         val lastSseLineAtNanos = java.util.concurrent.atomic.AtomicLong(System.nanoTime())
         val readIdleTimedOut = java.util.concurrent.atomic.AtomicBoolean(false)
+        // [T-sse-idle-reasoning-escalate] Reasoning models emit a burst of
+        // reasoning_content, then pause SILENTLY while they think before emitting
+        // the next burst or the final content/tool call. A flat idle budget tuned
+        // for a dead connection (calibrated on the loomy gateway that held the
+        // socket open for 60s) therefore false-kills a perfectly healthy
+        // reasoning stream. Observed 2026-10-03: model=sn-sensenova-6-8-flash
+        // streamed reasoning_content up to +40s, then went silent for 20s mid-
+        // thought → watchdog fired → dispatch_subtasks was abandoned and the
+        // user had to re-dispatch repeatedly. Once we have seen ANY reasoning
+        // delta we know the model is a thinking model, so we escalate the idle
+        // budget so a legit think-pause survives. This is set from the read loop
+        // below, so it is shared via atomic.
+        val idleReasoningEscalate = java.util.concurrent.atomic.AtomicBoolean(false)
         val readIdleWatchdog = launch {
             while (true) {
                 delay(STREAM_READ_IDLE_POLL_MS)
                 val idleMs = (System.nanoTime() - lastSseLineAtNanos.get()) / 1_000_000L
-                if (idleMs >= STREAM_READ_IDLE_TIMEOUT_MS) {
+                val budgetMs = if (idleReasoningEscalate.get()) STREAM_READ_IDLE_REASONING_TIMEOUT_MS else STREAM_READ_IDLE_TIMEOUT_MS
+                if (idleMs >= budgetMs) {
                     readIdleTimedOut.set(true)
                     com.miniseuleros.app.logging.AppLogger.warning(
                         "OpenAIProvider",
                         "[T-sse-read-idle-watchdog] no SSE line for ${idleMs}ms mid-stream " +
-                            "(model=${model.id}) — aborting instead of waiting out the gateway's idle timeout",
+                            "(model=${model.id}, idleReasoningEscalate=${idleReasoningEscalate.get()}, budget=${budgetMs}ms) — " +
+                            "aborting instead of waiting out the gateway's idle timeout",
                     )
                     call.cancel()
                     return@launch
@@ -1110,6 +1134,7 @@ class OpenAIProvider private constructor(
                     if (delta != null) {
                         val cLen = delta.optString("content", "").length
                         val rcLen = delta.optString("reasoning_content", "").length
+                        if (rcLen > 0) idleReasoningEscalate.set(true)
                         val rLen = delta.optString("reasoning", "").length
                         val tcLen = delta.optJSONArray("tool_calls")?.length() ?: 0
                         val role = delta.optString("role", "")
@@ -1121,6 +1146,7 @@ class OpenAIProvider private constructor(
                         }
                         contentLen += cLen
                         reasoningLen += rcLen + rLen
+                        if (rcLen + rLen > 0) idleReasoningEscalate.set(true)
                         if (tcLen > 0) toolCallEventCount += tcLen
                     } else if (type.isNotEmpty()) {
                         // Responses API event-typed diagnostics
