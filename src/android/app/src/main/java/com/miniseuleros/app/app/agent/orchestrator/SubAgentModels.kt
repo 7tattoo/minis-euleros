@@ -29,8 +29,14 @@ object SubAgentLimits {
     const val MAX_PATH_PATTERNS = 24
     const val DEFAULT_TIMEOUT_SEC = 300
     const val MAX_TIMEOUT_SEC = 900
-    const val DEFAULT_MAX_TURNS = 8
-    const val MAX_MAX_TURNS = 16
+    // [T-android-collab-long-tasks] (1.16.0) Raised for long-task stability:
+    // bulk retrieval/build subtasks routinely needed >16 tool turns and died
+    // as FAILED "max turns reached" with the work half-done (and, pre-persistence
+    // contract, lost). 24 keeps a hard runaway bound while letting a child
+    // finish a real scan→edit→build→verify arc; wall-clock is still bounded by
+    // timeoutSec (≤900s), so the turn ceiling only buys useful work, not hangs.
+    const val DEFAULT_MAX_TURNS = 10
+    const val MAX_MAX_TURNS = 24
     const val DEFAULT_CONCURRENCY = 2
 
     /** Per-subtask section budget in the aggregated facts pack (chars). */
@@ -202,6 +208,17 @@ data class SubTaskOutcome(
     val facts: List<String> = emptyList(),
     val files: List<String> = emptyList(),
     val issues: String? = null,
+    /**
+     * [T-subagent-verify-files] (1.16.0) Harness-side disk verification of the
+     * sub-agent's declared FILES, rendered into the pack and the handoff
+     * ledger. A sub-agent that reports DONE with declared files that do not
+     * exist on disk is either hallucinating its output or wrote outside its
+     * scope — either way the orchestrator must be told instead of trusting
+     * the pack. Null = nothing declared (pure-reasoning task) or nothing
+     * verifiable (path unresolvable); "n/n verified" = all present; any
+     * MISSING entry names the fabricated path explicitly.
+     */
+    val filesVerification: String? = null,
     val error: String? = null,
     val turnsUsed: Int = 0,
     val durationMs: Long = 0,

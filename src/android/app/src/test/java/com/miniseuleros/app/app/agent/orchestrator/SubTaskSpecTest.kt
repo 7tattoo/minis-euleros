@@ -16,7 +16,10 @@ class SubTaskSpecTest {
         // Empty scopes → no file tools derived (deny-by-default).
         assertEquals(emptyList<String>(), specs[0].effectiveTools)
         assertEquals(300, specs[0].timeoutSec)
-        assertEquals(8, specs[0].maxTurns)
+        // [T-android-collab-long-tasks] default raised 8 → 10 with the
+        // max-turns ceiling 16 → 24.
+        assertEquals(SubAgentLimits.DEFAULT_MAX_TURNS, specs[0].maxTurns)
+        assertEquals(10, specs[0].maxTurns)
     }
 
     @Test

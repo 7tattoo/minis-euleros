@@ -94,7 +94,7 @@ object AgentTools {
             // and some serialized it as a JSON string → optJSONArray() null →
             // misleading required-params error (five identical failures with
             // valid payloads). Nested string-array fields get their own items.
-            "subtasks" to AgentToolParam("array", "2-8 subtask objects. MUST be a real JSON array of objects, never a string. Each: {id, title, instructions, read_paths[], write_paths[], tools[], group_id?, timeout_sec?, max_turns?}. instructions must be self-contained (goal, steps, output requirements); read_paths/write_paths are linux path globs (* segment, ** recursive, bare dir covers subtree) — empty write_paths forbids ALL file modification; tools ⊆ {file_read, file_write, file_edit, shell_execute}. DEFAULT (tools 留空): 当 read_paths 或 write_paths 非空时自动授予 {file_read, file_write, file_edit, shell_execute}（shell 用于 gradle/git/grep 等，PRoot 已限制在沙箱内）；仅当 read/write 全空才是纯推理任务（无工具）。显式 tools 会完全覆盖默认集。group_id optionally names a specific model group; timeout_sec ≤ 900; max_turns ≤ 16. 重要：read_paths/write_paths 必须是绝对路径（以 /var/minis-euleros/ 开头），相对前缀会被路径守卫拒绝。",
+            "subtasks" to AgentToolParam("array", "2-8 subtask objects. MUST be a real JSON array of objects, never a string. Each: {id, title, instructions, read_paths[], write_paths[], tools[], group_id?, timeout_sec?, max_turns?}. instructions must be self-contained (goal, steps, output requirements); read_paths/write_paths are linux path globs (* segment, ** recursive, bare dir covers subtree) — empty write_paths forbids ALL file modification; tools ⊆ {file_read, file_write, file_edit, shell_execute}. DEFAULT (tools 留空): 当 read_paths 或 write_paths 非空时自动授予 {file_read, file_write, file_edit, shell_execute}（shell 用于 gradle/git/grep 等，PRoot 已限制在沙箱内）；仅当 read/write 全空才是纯推理任务（无工具）。显式 tools 会完全覆盖默认集。group_id optionally names a specific model group; timeout_sec ≤ 900; max_turns ≤ 24 (default 10; raise for long build/scan tasks). 重要：read_paths/write_paths 必须是绝对路径（以 /var/minis-euleros/ 开头），相对前缀会被路径守卫拒绝。",
                 items = JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {
@@ -106,7 +106,7 @@ object AgentTools {
                         put("tools", AgentToolParam("array", "Allowed tools ⊆ {file_read, file_write, file_edit, shell_execute}.", items = JSONObject().apply { put("type", "string") }).toJson())
                         put("group_id", AgentToolParam("string", "Optional model group id to route this subtask to.").toJson())
                         put("timeout_sec", AgentToolParam("integer", "Per-subtask timeout, 30-900, default 300.").toJson())
-                        put("max_turns", AgentToolParam("integer", "Per-subtask tool turns, 1-16, default 8.").toJson())
+                        put("max_turns", AgentToolParam("integer", "Per-subtask tool turns, 1-24, default 10; raise for long build/scan tasks.").toJson())
                     })
                     put("required", JSONArray(listOf("instructions")))
                 }),

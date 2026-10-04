@@ -11,15 +11,19 @@ import android.content.SharedPreferences
  * key name is reused verbatim so the two platforms stay greppable as one
  * feature.
  *
- * Semantics, matching iOS:
- *   - false (the default — iOS uses a bare `UserDefaults.bool`, which is false
- *     when unset): crossing the compact threshold before a send PROMPTS the
- *     user.
- *   - true: the same crossing compacts silently and then sends.
+ * Semantics:
+ *   - true (the default since 1.16.0 — [T-android-compact-autoenable]): crossing
+ *     the compact threshold before a send compacts silently and then sends.
+ *     Auto-compact is enabled autonomously per the context-management plan; the
+ *     in-loop gate between tool iterations has always compacted unconditionally.
+ *     Upgrades from installs that never touched the toggle flip from "prompt"
+ *     to "auto"; users who explicitly stored false keep the prompt.
+ *   - false: crossing the threshold PROMPTS the user (explicit opt-out).
  *
  * Global rather than per-session on purpose: iOS persists it so "future
  * conversations inherit it", which is the whole point of the one-tap opt-in
- * offered on the prompt.
+ * offered on the prompt. iOS still defaults to false (bare UserDefaults.bool);
+ * do not copy that default back here without revisiting the plan above.
  */
 object AutoCompactPrefs {
     private const val PREFS = "minis_auto_compact_prefs"
@@ -29,7 +33,7 @@ object AutoCompactPrefs {
     private var appContext: Context? = null
 
     @Volatile
-    private var cachedEnabled: Boolean = false
+    private var cachedEnabled: Boolean = true
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -41,10 +45,10 @@ object AutoCompactPrefs {
      */
     fun prime(context: Context) {
         appContext = context.applicationContext
-        cachedEnabled = prefs(context).getBoolean(KEY_ENABLED, false)
+        cachedEnabled = prefs(context).getBoolean(KEY_ENABLED, true)
     }
 
-    /** Context-free read. False before [prime] runs, matching a fresh install. */
+    /** Context-free read. True before [prime] runs (autonomous default). */
     fun isEnabled(): Boolean = cachedEnabled
 
     fun setEnabled(context: Context, enabled: Boolean) {

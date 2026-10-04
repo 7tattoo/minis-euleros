@@ -338,6 +338,14 @@ class ChatViewModel(
          */
         internal const val MAX_COMPACT_LLM_CALLS = 6
 
+        // [T-android-compact-redundancy] (1.16.0) Hard ceiling for the STORED
+        // compact summary lives in CompactSummaryCap.kt (top-level, unit-test
+        // friendly): the summary REPLACES the transcript, so it must never
+        // itself become the next context wall; chained compaction folds the
+        // previous summary in as merge input, so without a bound each round
+        // could grow the next. See COMPACT_SUMMARY_HARD_CAP_CHARS /
+        // applyCompactSummaryHardCap / elideMiddle.
+
         /** Floor for the dynamic wall-clock timeout. */
         internal const val COMPACT_TIMEOUT_BASE_MS = 60_000L
 
@@ -2998,7 +3006,11 @@ class ChatViewModel(
             sb.append("(outline budget too small for any entry; ")
                 .append(messages.size).append(" messages exist in the DB)\n")
         }
-        return sb.toString().take(DEGRADED_SUMMARY_BUDGET_CHARS)
+        // [T-android-compact-redundancy] The outline budget (12k) plus the
+        // carried-forward previous-summary tail (4k) can exceed the stored-
+        // summary hard cap; clamp through the same elider as the LLM path so
+        // both compaction routes obey one ceiling.
+        return applyCompactSummaryHardCap(sb.toString().take(DEGRADED_SUMMARY_BUDGET_CHARS))
     }
 
     /**
@@ -3727,10 +3739,17 @@ class ChatViewModel(
         depth: Int = 0,
     ): String {
         val transcript = buildConversationTextForSummary(messages)
-        val conversationText = if (previousSummary.isNullOrBlank()) {
+        // [T-android-compact-redundancy] (1.16.0) Chain compaction must not
+        // balloon: an oversized previous summary is folded to head+tail before
+        // it is fed back as merge input, and the compact system prompt orders
+        // the model to condense rather than concatenate. 10k chars of input
+        // previous-summary is far above what a well-behaved chain produces
+        // (each output targets ~6k chars), so healthy chains never hit this.
+        val foldedPrevious = previousSummary?.takeIf { it.isNotBlank() }?.let { elideMiddle(it, COMPACT_PREVIOUS_SUMMARY_FOLD_CHARS) }
+        val conversationText = if (foldedPrevious == null) {
             transcript
         } else {
-            "Previous context summary:\n$previousSummary\n\n" +
+            "Previous context summary:\n$foldedPrevious\n\n" +
                 "New conversation to merge:\n$transcript"
         }
         // [T-android-compact-runaway] Spend one unit of the run's call budget.
@@ -3749,7 +3768,7 @@ class ChatViewModel(
             depth = depth,
             callsIssued = spent,
         )
-        return try {
+        val produced = try {
             generateCompactSummary(conversationText)
         } catch (e: CancellationException) {
             throw e
@@ -3800,6 +3819,11 @@ class ChatViewModel(
             // summarised under the full system prompt.
             summary1 + "\n\n" + summary2
         }
+        // [T-android-compact-redundancy] Output-side hard cap: whatever the
+        // model produced (single pass or split join), the STORED summary is
+        // elided to head+tail if it exceeds the ceiling. The split join is the
+        // realistic oversize case — two capped partials can total ~2x cap.
+        return applyCompactSummaryHardCap(produced)
     }
 
     /**
@@ -3839,7 +3863,11 @@ class ChatViewModel(
         val model = summaryOverride?.second ?: currentModel
         val contextWindow = model?.contextWindow ?: 128_000
         val estimatedInput = userMessage.length / 4
-        val maxOut = maxOf(1024, minOf(8192, contextWindow - estimatedInput))
+        // [T-android-compact-redundancy] 6144-token output ceiling (was 8192):
+        // chain compaction feeds the previous summary back as merge input, so
+        // an oversized output ceiling lets each round grow the next input. The
+        // system prompt targets ~6k chars; this is the hard source-side bound.
+        val maxOut = maxOf(1024, minOf(6144, contextWindow - estimatedInput))
         val provider = (summaryOverride?.first ?: currentProvider)
             ?: throw IllegalStateException("No LLM provider available for compaction")
         val response = provider.sendMessage(
@@ -4181,6 +4209,14 @@ class ChatViewModel(
     private val compactSummarySystemPrompt: String = """
         You are a context compaction engine. Your summary will REPLACE the original messages in the conversation context window. The agent will read your summary as past context, then proceed based on the user's NEXT message — your summary is background, not a standing work order. Write the summary in the same language the user used in the conversation.
 
+        READER IS A MODEL, NOT A HUMAN:
+        The summary is a model-to-model handoff. The next reader is another model instance (possibly with no other context). Optimize for that reader: terse, information-dense, structured; no pleasantries, no prose padding. Human readability is explicitly NOT required.
+
+        REDUNDANCY CONTROL (chained compaction must not balloon):
+        - If a "Previous context summary" is provided, FOLD it into your output: keep its still-relevant facts, DROP details that are stale, superseded, or repeated by newer turns. Never concatenate it wholesale into the new summary.
+        - Your merged output must be SHORTER than (previous summary + new transcript) would be; the summary size must stay bounded no matter how many times the conversation compacts.
+        - Keep the final summary as SHORT as the formula below allows — as concise as possible on the required basis. The harness hard-caps oversized summaries.
+
         ABSOLUTE RULE — WORK SURVIVES COMPACTION [T-android-subagent-handoff]:
         The conversation may be compacted, but the WORK must never be lost. If any multi-model collaboration (协作/派发子任务/dispatch) happened in this conversation, you MUST copy these into the summary VERBATIM (never paraphrase, never shorten, never drop):
         - Every file path the collaboration produced or referenced (工具块 FILES 行 / 协作交接账本路径 / ORCHESTRATION JOURNAL 路径)
@@ -4197,17 +4233,19 @@ class ChatViewModel(
         - Errors encountered and how they were resolved
         - Important constraints, rules, or user preferences mentioned
         - Any tool calls and their results that affect current state
-        - The exact point where multi-step work stopped: the LAST step attempted and its outcome
+        - Project notes files the work depends on (e.g. <project>/PROGRESS.md) — cite their paths
 
-        STRUCTURE:
-        1. Start with a one-line description of what the conversation was about (use past tense — "User asked X, agent did Y", NOT "Goal: X").
-        2. Then a concise narrative of what happened, preserving technical details.
-        3. Then, IF collaboration happened, a "协作交接 / COLLAB HANDOFF" section with: ledger path, per-subtask outcomes (taskId/model/status/summary/files), unfinished work with exact next steps, and produced-artifact paths — copied verbatim from the tool blocks.
-        4. End with a "What had been done so far" section listing completed work — NOT a "todo" or "pending" list. Do not invent ongoing objectives or carry-over tasks from old turns; if the user wants to continue, they will say so in their next message. Exception: if a task was genuinely mid-execution when compaction happened, record factually where it stopped (last attempted step, its result) so it can be resumed at the correct point instead of restarted — state the observable next step without inventing new objectives.
+        STRUCTURE — follow the compaction formula exactly (five parts, in the user's language):
+        1. 用户核心需求 / CORE REQUIREMENT — which project this work belongs to (project paths verbatim) + which docs/project files must be referenced (paths verbatim) + the user's core requirement in their own words (condensed, not paraphrased beyond recognition).
+        2. 有效策略 / WORKING PLAN — the plan/approach that proved effective, and briefly what was ruled out.
+        3. 关键发现与进度 / KEY FINDINGS & PROGRESS — verified facts, decisions + rationale, errors + resolutions, deliverables with paths/hashes/commit ids, current progress state.
+        4. 最后的操作 / LAST OPERATION — the last thing attempted and its outcome; overall completion status written as 完成/未完成 + degree (e.g. "代码已改完并构建通过，签名交付未做，整体约 80%"). Never guess: if the transcript shows the state, state it; the reader must not have to reconstruct progress by guessing.
+        5. 下一步 / NEXT STEP — the single observable next step for genuinely unfinished work, stated factually from where work actually stopped. Do NOT invent ongoing objectives or carry-over tasks the user never asked for; if the work was fully completed, say "无 / none".
+        Then, IF collaboration happened, a "协作交接 / COLLAB HANDOFF" section with: ledger path, per-subtask outcomes (taskId/model/status/summary/files), unfinished work with exact next steps, and produced-artifact paths — copied verbatim from the tool blocks.
 
         PRIORITIZE recent context over older history — recent decisions and recent file/path references are most useful for continuity.
 
-        Do NOT translate or alter code snippets, file paths, identifiers, or error messages. Be concise but never lose information the agent needs.
+        Do NOT translate or alter code snippets, file paths, identifiers, or error messages.
     """.trimIndent()
 
     // T203 part 2: these MUST be declared before `init { loadSession() }` below.
@@ -11482,7 +11520,7 @@ Memory system (currently DISABLED):
         val collabOn = providerRepository.subAgentsAvailable() &&
             SubAgentCollabPrefs.enabled.value
         val collabToolBullet = if (collabOn) {
-            "- dispatch_subtasks: Multi-model orchestration. Send a PLAN of self-contained subtasks to sub-agent models drawn from the user's model groups. Each subtask carries explicit instructions AND a permission scope (read_paths/write_paths globs, allowed tools) — the harness REJECTS every request beyond the scope, so a misbehaving sub-agent cannot touch anything else. Sub-agents return structured facts packs; only packs enter this context. Prefer it over doing everything inline when a task decomposes into ≥2 independent work items (research+implement+verify), when bulk steps suit a cheaper/faster model, or when parallelism helps. Never dispatch a subtask you could resolve with one tool call.\n"
+            "- dispatch_subtasks: Multi-model orchestration. Send a PLAN of self-contained subtasks to sub-agent models drawn from the user's model groups. Each subtask carries explicit instructions AND a permission scope (read_paths/write_paths globs, allowed tools) — the harness REJECTS every request beyond the scope, so a misbehaving sub-agent cannot touch anything else. Sub-agents run in their OWN context windows and hand back structured facts packs; only packs enter this context, so bulk work spent there costs you no context here. [T-android-collab-lower-threshold] Dispatch is the DEFAULT for heavy work, not a last resort: bulk retrieval (scanning/grepping a code base, reading many files, long research), bulk tool-call loops (repeated shell/analysis iterations), or ≥2 independent work items should ALL go to sub-agents — you orchestrate, verify, integrate, and deliver. Keep inline only what one or two tool calls resolve; never dispatch a subtask you could resolve with one tool call.\n"
         } else ""
         val collabWorkflowSection = if (collabOn) """
 
@@ -11490,9 +11528,22 @@ Multi-model collaboration (dispatch_subtasks) workflow:
 1. PLAN first: decompose the request into subtasks with clear boundaries. Each subtask's instructions MUST be self-contained — sub-agents see NOTHING of this conversation, so restate the goal, the concrete steps, file paths, and exactly what to return.
 2. SCOPE each subtask: declare read_paths/write_paths (linux path globs) covering ONLY what it needs, and list the tools it may use. The harness rejects out-of-scope requests — a sub-agent that hits a denial will report BLOCKED; widen its scope and re-dispatch if the denial was reasonable.
 3. Dispatch: default mode "waves" serializes subtasks whose write paths collide (file-write lease) and parallelizes independent ones. When you name group_id, it must be a group the user configured (minis-config `get --filter groups`); otherwise the default sub-agent group from Settings → 模型组 is used.
-4. Consume results: each returned facts pack has STATUS/SUMMARY/FACTS/FILES/ISSUES. Verify claims against artifacts (spot-check files) before relying on them. FAILED/BLOCKED subtasks → fix the brief or scope and re-dispatch ONLY the failed ones.
-5. Integrate: you own the final deliverable. Combine packs, resolve conflicts yourself, then produce the final answer. If a run's journal path is returned, it is on disk for audit/debugging.
+4. Consume results: each returned facts pack has STATUS/SUMMARY/FACTS/FILES/ISSUES. Sub-agent FILES paths are disk-verified by the harness; a path reported MISSING/UNVERIFIED means the claimed artifact does not exist — treat it as fabrication risk, re-check or re-dispatch. Even VERIFIED claims should be spot-checked against the actual file content before you rely on them. FAILED/BLOCKED subtasks → fix the brief or scope and re-dispatch ONLY the failed ones.
+5. Integrate: you own the final deliverable. Combine packs, resolve conflicts yourself, then produce the final answer. If a run's journal path is returned, it is on disk for audit/debugging; the append-only handoff ledger (.collab/HANDOFF.md) survives compaction — cite real artifact paths from it when continuing past work.
 """ else "\n"
+        // [T-android-notes-to-disk] (1.16.0) Context discipline — the compact
+        // prompt preserves what the transcript holds, but the transcript is
+        // volatile (compaction can fire any turn). Key conclusions must live
+        // on disk in the project's own directory the MOMENT they are reached,
+        // not when a token wall approaches. Always injected (not gated on
+        // collabOn): this is context hygiene, not collaboration.
+        val contextDisciplineSection = """
+
+Context discipline (结论落盘):
+- Key conclusions, decisions, findings, and 踩坑 go STRAIGHT into a notes file inside the project's own directory (e.g. <project>/PROGRESS.md — 进展/成果/关键发现, self-summarized, not a raw transcript log). Do NOT wait for a compaction trigger: compaction can fire on any turn, and anything not on disk can be lost to it. Write the note when a stage completes, not when the token wall is near.
+- Keep per-project notes isolated (one .md per project dir) so future sessions — and sub-agents — can recover exactly the needed context by reading that one file; cite its path when continuing related work.
+- Bulk retrieval over notes or code bases can be delegated to sub-agents so only the distilled result enters your context.
+"""
         val base = identitySection + """You should proactively use shell commands to accomplish the user's tasks — managing files, networking, and any other operations a Linux terminal can perform.
 
 Available tools:
@@ -11581,7 +11632,7 @@ Environment variables:
 - Shell environment variables may contain sensitive API keys, tokens, or passwords. NEVER echo, print, cat, or otherwise output their values to stdout/stderr. Always reference them by variable name (e.g. ${'$'}API_KEY) inside scripts or commands — never inline the literal value.
 - When a skill or task requires an environment variable that is not set, tell the user which variable is missing and provide a tappable deep link to create it: [Set ENV_NAME](miniseuleros://settings/environments?create_key=ENV_NAME&create_value=) — the user can tap it to open the Environment Variables page with the key pre-filled.
 - Settings deep links: when you tell the user "go to Settings → X" or want to point them at a specific setting, prefer a Markdown link `[Label](miniseuleros://settings/<path>)` over plain prose. Available paths: providers (list), providers/<instanceId> (one provider), model-groups (incl. Agent Loop), model-groups/<groupId>, usage (token usage), skills, memory, storage, shared-folders (Shared Folders: /var/minis-euleros/{shared,skills,memory}), mount-external (Mount External Folders), logs, appearance, background, about, permissions, environments[?create_key=K&create_value=V[&create_note=N]], rootfs (also reachable as mirrors). Unknown paths fall back to Settings home, but prefer the exact path so users land where they want. These settings/action links are app deep links — render them as Markdown links in chat (same action-vs-resource rule as the miniseuleros:// section above: only /var/minis-euleros resource URLs may go to browser_use).
-- To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}${collabWorkflowSection}
+- To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}${collabWorkflowSection}${contextDisciplineSection}
 Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the native alarm tool (AlarmManager) or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)"""
 
         // Match iOS order exactly: skills → global memory → recent daily memory.

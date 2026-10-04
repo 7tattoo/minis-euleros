@@ -388,6 +388,15 @@ class SubAgentRunner(
     ): SubTaskOutcome {
         val paged = pageIfNeeded(spec, rawFinal)
         val parsed = parseFactsPack(paged.displayText, spec)
+        // [T-subagent-verify-files] Anti-fabrication gate: the child's DONE
+        // is only as good as the artifacts it claims. Check every declared
+        // FILES path on disk before the pack is built — a path that does not
+        // exist is surfaced to the orchestrator as MISSING (the system prompt
+        // tells it to treat that as fabrication risk and re-check or
+        // re-dispatch). Never silently rewrites status: an honest child that
+        // legitimately deleted a scratch file keeps its DONE but carries the
+        // visible flag for the orchestrator to judge.
+        val filesVerification = verifyDeclaredFiles(parsed.files)
         val status = when {
             maxedOut -> SubTaskStatus.FAILED
             parsed.status.equals("BLOCKED", true) -> SubTaskStatus.BLOCKED
@@ -410,6 +419,7 @@ class SubAgentRunner(
             summary = parsed.summary,
             facts = parsed.facts,
             files = parsed.files,
+            filesVerification = filesVerification,
             issues = parsed.issues,
             error = if (maxedOut) "max turns (${spec.maxTurns}) reached without a final answer" else null,
             turnsUsed = turns,
@@ -423,6 +433,51 @@ class SubAgentRunner(
     }
 
     private data class Paged(val displayText: String, val overflowPath: String?)
+
+    /**
+     * [T-subagent-verify-files] Disk-check the sub-agent's declared FILES.
+     *
+     * Resolution goes through [PRootKernel.resolveSessionHostPath] exactly like
+     * the offload paths, so a path the harness cannot even resolve is reported
+     * UNVERIFIED rather than MISSING (resolution failure says something about
+     * the sandbox, not about the child's honesty). Returns null when there is
+     * nothing to check; otherwise one compact line that lands verbatim in the
+     * pack and the ledger:
+     *   - "3/3 verified on disk" — all declared artifacts exist
+     *   - "MISSING on disk: <path> (…)" — declared but nonexistent
+     */
+    private fun verifyDeclaredFiles(paths: List<String>): String? {
+        if (paths.isEmpty()) return null
+        val missing = ArrayList<String>()
+        val unverified = ArrayList<String>()
+        var verified = 0
+        for (p in paths) {
+            val host = try {
+                PRootKernel.resolveSessionHostPath(sessionId, p, context)
+            } catch (_: Exception) {
+                null
+            }
+            when {
+                host == null -> unverified.add(p)
+                host.exists() -> verified++
+                else -> missing.add(p)
+            }
+        }
+        if (verified == paths.size) return "$verified/${paths.size} verified on disk"
+        val sb = StringBuilder()
+        if (missing.isNotEmpty()) {
+            sb.append("MISSING on disk: ")
+                .append(missing.joinToString("; ") { it.take(120) })
+                .append(" — declared but nonexistent (fabrication risk; re-check before relying)")
+        }
+        if (unverified.isNotEmpty()) {
+            if (sb.isNotEmpty()) sb.append(" | ")
+            sb.append("UNVERIFIED (path unresolvable): ")
+                .append(unverified.joinToString("; ") { it.take(120) })
+        }
+        if (verified > 0) sb.append(" | $verified/${paths.size} verified")
+        return sb.toString().ifBlank { null }
+    }
 
     /**
      * [T-subagent-reasoning] Condense a child's reasoning trace to

@@ -236,6 +236,10 @@ object SubAgentOrchestrator {
                 if (o.summary.isNotBlank()) sb.append("  - SUMMARY: ").append(o.summary).append('\n')
                 o.facts.take(10).forEach { f -> sb.append("  - FACT: ").append(f.take(200)).append('\n') }
                 if (o.files.isNotEmpty()) sb.append("  - FILES: ").append(o.files.joinToString(", ")).append('\n')
+                // [T-subagent-verify-files] Ledger carries the same disk
+                // verification the pack shows, so a cold session reading only
+                // HANDOFF.md knows which artifacts were machine-checked.
+                if (!o.filesVerification.isNullOrBlank()) sb.append("  - FILES-CHECK: ").append(o.filesVerification).append('\n')
                 if (!o.issues.isNullOrBlank()) sb.append("  - ISSUES: ").append(o.issues.take(400)).append('\n')
                 if (!o.error.isNullOrBlank()) sb.append("  - ERROR: ").append(o.error.take(300)).append('\n')
                 if (!o.resultFile.isNullOrBlank()) sb.append("  - RAW-RESULT: ").append(o.resultFile).append('\n')
@@ -345,6 +349,9 @@ object SubAgentOrchestrator {
             // narrative is the right thing to lose under pressure.
             if (o.reasoning.isNotBlank()) sb.append("\nREASONING: ").append(o.reasoning.replace('\n', ' '))
             if (o.files.isNotEmpty()) sb.append("\nFILES: ").append(o.files.joinToString(", "))
+            // [T-subagent-verify-files] Rendered directly under FILES so the
+            // orchestrator reads claim and verification as one unit.
+            if (!o.filesVerification.isNullOrBlank()) sb.append("\nFILES-CHECK: ").append(o.filesVerification)
             if (!o.issues.isNullOrBlank()) sb.append("\nISSUES: ").append(o.issues)
             if (o.resultFile != null) sb.append("\nRAW: ").append(o.resultFile)
             if (o.reasoningFile != null) sb.append("\nREASONING-RAW: ").append(o.reasoningFile)

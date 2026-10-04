@@ -10,8 +10,17 @@ package com.miniseuleros.app.data
  * the actual compact + offload execution lives in the agent loop, this struct
  * only answers "what state are we in?".
  *
- * Thresholds intentionally leave headroom (10k/20k/40k below the ceiling) so
- * one more agent turn can still fit before the user sees any disruption.
+ * Thresholds intentionally leave generous headroom below the ceiling so one
+ * more agent turn always fits and the compact pass itself runs on a smaller
+ * transcript (faster) instead of slamming into the provider limit.
+ *
+ * [T-android-compact-early-threshold] (1.16.0): compact/auto-compact lines were
+ * lowered (10k/20k headroom -> 20k/40k) and the 32-64K tier gained auto-compact
+ * (12k headroom) so compaction fires earlier and autonomously per the
+ * context-management plan: monitor pressure in real time, compact before the
+ * wall, never let the post-limit compact get slow. iOS parity note: iOS still
+ * uses the older tight thresholds (ctx-10k/ctx-20k, 32-64K exhaustedOnly) —
+ * do not silently reuse these numbers there.
  */
 data class ContextPolicy(
     /** Above this token count, next tool result should be written to disk. 0 disables. */
@@ -53,9 +62,12 @@ data class ContextPolicy(
         /**
          * Produce the policy for a given context window size. Four tiers:
          *   - `<32K`   → offload/compact disabled; UI tells user to start a new chat.
-         *   - `32K–64K` → offload only; exhaust line = ctx − 10k.
-         *   - `64K–128K` → offload + compact; headroom 10k for compact.
-         *   - `≥128K`  → generous offload + compact; headroom 20k.
+         *   - `32K–64K` → offload + early auto-compact (12k headroom); small
+         *     windows still compact autonomously rather than stalling.
+         *   - `64K–128K` → offload + compact; 20k headroom for compact.
+         *   - `≥128K`  → generous offload + compact; 40k headroom.
+         * Offload lines sit below the compact lines so the cheap lossless
+         * escape (disk) always gets first crack; compact is the lossy fallback.
          */
         fun forContextWindow(contextWindow: Int): ContextPolicy = when {
             contextWindow < 32_000 -> ContextPolicy(
@@ -66,23 +78,23 @@ data class ContextPolicy(
                 manualCompactAllowed = false,
             )
             contextWindow < 64_000 -> ContextPolicy(
-                offloadThreshold = contextWindow - 10_000,
-                offloadTarget = contextWindow - 15_000,
-                compactThreshold = 0,
-                exhaustedOnly = true,
+                offloadThreshold = contextWindow - 14_000,
+                offloadTarget = contextWindow - 18_000,
+                compactThreshold = contextWindow - 12_000,
+                exhaustedOnly = false,
                 manualCompactAllowed = true,
             )
             contextWindow < 128_000 -> ContextPolicy(
-                offloadThreshold = contextWindow - 20_000,
-                offloadTarget = contextWindow - 30_000,
-                compactThreshold = contextWindow - 10_000,
+                offloadThreshold = contextWindow - 30_000,
+                offloadTarget = contextWindow - 40_000,
+                compactThreshold = contextWindow - 20_000,
                 exhaustedOnly = false,
                 manualCompactAllowed = true,
             )
             else -> ContextPolicy(
-                offloadThreshold = contextWindow - 40_000,
-                offloadTarget = contextWindow - 60_000,
-                compactThreshold = contextWindow - 20_000,
+                offloadThreshold = contextWindow - 60_000,
+                offloadTarget = contextWindow - 80_000,
+                compactThreshold = contextWindow - 40_000,
                 exhaustedOnly = false,
                 manualCompactAllowed = true,
             )
