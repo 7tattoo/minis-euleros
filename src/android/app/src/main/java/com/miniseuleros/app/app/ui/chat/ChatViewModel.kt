@@ -3969,9 +3969,25 @@ class ChatViewModel(
         // estimate over the effective (compact-folded) history so the gates
         // stay live when the provider reports nothing.
         val apiTokens = _lastTurnContextTokens.value
+        // [T-android-compact-gateway-usage-underreport] A local gateway that
+        // trims history before forwarding it upstream reports a usage
+        // prompt_tokens that reflects only the trimmed slice, not the full
+        // history the client is carrying. Observed 2026-10-12: client sent
+        // 1689 messages (~660k tokens, 3.5 MB body) but the gateway reported
+        // ~99k prompt_tokens, because it had silently cut the earlier turns to
+        // fit the upstream window. Judging the gate on that number means the
+        // context gate NEVER fires while the gateway quietly discards early
+        // history. Judge on the LARGER of the API figure and the local
+        // estimate over the exact history the next call will send: for a
+        // provider that reports true usage the two agree (usage ≈ local
+        // estimate), so behaviour is unchanged; for a trimming gateway the
+        // local estimate wins and the gate compacts before the gateway has to
+        // drop anything. Mirrors iOS AIChatViewModel.swift.
+        val localEstimate = estimateContextTokensLLM(effectiveAgentHistory())
         val (tokens, source) =
-            if (apiTokens > 0) Pair(apiTokens, "api")
-            else Pair(estimateContextTokensLLM(effectiveAgentHistory()), "est")
+            if (localEstimate > 0 && localEstimate > apiTokens) Pair(localEstimate, "est")
+            else if (apiTokens > 0) Pair(apiTokens, "api")
+            else Pair(localEstimate, "est")
         if (tokens <= 0) return PreSendContextAction.PROCEED
         // [T-context-window-live-read] Live window (entry re-resolved + group
         // contextLimitTokens folded in) — not the currentModel snapshot.
@@ -3980,7 +3996,7 @@ class ChatViewModel(
         if (source == "est") {
             AppLogger.info(
                 TAG,
-                "[Context] pre-send estimate-only ($tokens / $window tokens, api usage missing) — gates stay live via local estimate",
+                "[Context] pre-send using local estimate ($tokens / $window tokens; api usage missing or underreported by gateway) — gates stay live via local estimate",
             )
         }
         return when (policy.check(tokens, window)) {
@@ -4114,9 +4130,25 @@ class ChatViewModel(
         // gate: a relay that never reports usage would keep this guard
         // permanently silent while the turn keeps fanning out tool calls.
         val apiTokens = _lastTurnContextTokens.value
+        // [T-android-compact-gateway-usage-underreport] A local gateway that
+        // trims history before forwarding it upstream reports a usage
+        // prompt_tokens that reflects only the trimmed slice, not the full
+        // history the client is carrying. Observed 2026-10-12: client sent
+        // 1689 messages (~660k tokens, 3.5 MB body) but the gateway reported
+        // ~99k prompt_tokens, because it had silently cut the earlier turns to
+        // fit the upstream window. Judging the gate on that number means the
+        // context gate NEVER fires while the gateway quietly discards early
+        // history. Judge on the LARGER of the API figure and the local
+        // estimate over the exact history the next call will send: for a
+        // provider that reports true usage the two agree (usage ≈ local
+        // estimate), so behaviour is unchanged; for a trimming gateway the
+        // local estimate wins and the gate compacts before the gateway has to
+        // drop anything. Mirrors iOS AIChatViewModel.swift.
+        val localEstimate = estimateContextTokensLLM(effectiveAgentHistory())
         val (tokens, source) =
-            if (apiTokens > 0) Pair(apiTokens, "api")
-            else Pair(estimateContextTokensLLM(effectiveAgentHistory()), "est")
+            if (localEstimate > 0 && localEstimate > apiTokens) Pair(localEstimate, "est")
+            else if (apiTokens > 0) Pair(apiTokens, "api")
+            else Pair(localEstimate, "est")
         if (tokens <= 0) return InLoopContextAction.PROCEED
         val window = effectiveContextWindowTokens() ?: return InLoopContextAction.PROCEED
         val policy = ContextPolicy.forContextWindow(window)
